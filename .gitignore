@@ -1,0 +1,20 @@
+﻿# Virtual environment
+venv/
+__pycache__/
+*.pyc
+
+# Raw & intermediate data (large, regenerable from raw CSVs)
+**/Raw_Data/
+**/Cleaned_Parquet/
+**/Final_Cleaned/
+**/Processed_Data/*.parquet
+
+# CTGAN synthetic data & trained generator models (large)
+**/CTGAN/Models/
+**/CTGAN/Synthetic/
+
+# Trained ML models (can be large -- .pkl files)
+**/Results/Models/*.pkl
+
+# Jupyter checkpoints
+.ipynb_checkpoints/

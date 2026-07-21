@@ -1,0 +1,6 @@
+{
+  "algorithm": "adaboost",
+  "ada_base_max_depth": 5,
+  "ada_n_estimators": 200,
+  "ada_learning_rate": 1.8343641469560932
+}
