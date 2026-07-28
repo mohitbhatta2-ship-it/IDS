@@ -1,11 +1,9 @@
 {
-  "n_layers": 3,
-  "n_units_l0": 96,
-  "n_units_l1": 64,
-  "n_units_l2": 160,
+  "n_layers": 2,
+  "n_units_l0": 224,
+  "n_units_l1": 384,
   "activation": "relu",
-  "solver": "adam",
-  "alpha": 0.0006786802814860594,
-  "learning_rate_init": 0.0025213991112063333,
-  "batch_size": 128
+  "alpha": 0.0001703619367708789,
+  "learning_rate_init": 0.0008797046978422353,
+  "batch_size": 64
 }

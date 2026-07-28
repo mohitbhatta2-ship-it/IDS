@@ -18,3 +18,7 @@ __pycache__/
 
 # Jupyter checkpoints
 .ipynb_checkpoints/
+
+# Allow the webapp deployment bundle even though these subfolder names are excluded above
+!webapp_data/
+!webapp_data/**

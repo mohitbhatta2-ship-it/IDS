@@ -1,0 +1,10 @@
+Class,Real Count,Synthetic Count,Substantive Mean-Diff Features,Substantive Avg Mean Diff %,Substantive Std-Diff Features,Substantive Avg Std Diff %,All-Features Avg Mean Diff %
+Infilteration,8197,1803,30,96.67,30,72.71,96.67
+DoS attacks-GoldenEye,2099,6297,30,22.28,28,25.04,22.28
+SSH-Bruteforce,5940,4060,30,4.56,28,8.33,4.56
+FTP-BruteForce,1992,5976,10,3.39,6,3.27,1050007.89
+DDOS attack-LOIC-UDP,1384,4152,20,2.77,11,15.04,980175.37
+DoS attacks-Slowloris,521,9479,30,2.09,29,2.59,2.09
+Brute Force -XSS,184,9816,30,1.54,30,0.67,1.54
+Brute Force -Web,489,9511,30,1.47,30,0.98,1.47
+DoS attacks-SlowHTTPTest,986,9014,10,1.01,6,0.89,0.34

@@ -1,8 +1,8 @@
 {
   "algorithm": "hist_gradient_boosting",
-  "hgb_max_iter": 100,
-  "hgb_learning_rate": 0.03432170835605239,
-  "hgb_max_depth": 7,
-  "hgb_max_leaf_nodes": 47,
-  "hgb_l2_regularization": 0.034369295193494936
+  "hgb_max_iter": 250,
+  "hgb_learning_rate": 0.1856048925770564,
+  "hgb_max_depth": 5,
+  "hgb_max_leaf_nodes": 38,
+  "hgb_l2_regularization": 0.9698823525505369
 }

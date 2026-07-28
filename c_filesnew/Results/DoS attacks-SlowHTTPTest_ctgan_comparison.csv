@@ -1,0 +1,31 @@
+,Real Mean,Synthetic Mean,Real Std,Synthetic Std,Mean Diff %,Std Diff %
+Init Fwd Win Byts,26883.0,26883.0,0.0,0.0,0.0,0.0
+Fwd IAT Tot,0.0,0.0,0.0,0.0,0.0,0.0
+Fwd IAT Max,0.0,0.0,0.0,0.0,0.0,0.0
+Dst Port,21.0,21.0,0.0,0.0,0.0,0.0
+Fwd IAT Mean,0.0,0.0,0.0,0.0,0.0,0.0
+Fwd Header Len,40.0,40.0,0.0,0.0,0.0,0.0
+Flow IAT Max,11.42,11.64,9.73,9.85,1.88,1.27
+Flow Duration,11.42,11.64,9.73,9.86,1.9,1.3
+Fwd Pkts/s,226536.78,223680.11,219086.4,218899.39,1.26,0.09
+TotLen Fwd Pkts,0.0,0.0,0.0,0.0,0.0,0.0
+Subflow Fwd Byts,0.0,0.0,0.0,0.0,0.0,0.0
+Fwd Pkt Len Mean,0.0,0.0,0.0,0.0,0.0,0.0
+Fwd Seg Size Avg,0.0,0.0,0.0,0.0,0.0,0.0
+Fwd Pkt Len Max,0.0,0.0,0.0,0.0,0.0,0.0
+Flow IAT Mean,11.42,11.64,9.73,9.85,1.89,1.27
+Flow Pkts/s,453073.57,446931.96,438172.81,437762.55,1.36,0.09
+Pkt Len Max,0.0,0.0,0.0,0.0,0.0,0.0
+Pkt Len Mean,0.0,0.0,0.0,0.0,0.0,0.0
+Fwd IAT Min,0.0,0.0,0.0,0.0,0.0,0.0
+Bwd Pkt Len Mean,0.0,0.0,0.0,0.0,0.0,0.0
+Pkt Size Avg,0.0,0.0,0.0,0.0,0.0,0.0
+Bwd Seg Size Avg,0.0,0.0,0.0,0.0,0.0,0.0
+Bwd Pkt Len Max,0.0,0.0,0.0,0.0,0.0,0.0
+TotLen Bwd Pkts,0.0,0.0,0.0,0.0,0.0,0.0
+Subflow Bwd Byts,0.0,0.0,0.0,0.0,0.0,0.0
+Pkt Len Var,0.0,0.0,0.0,0.0,0.0,0.0
+Pkt Len Std,0.0,0.0,0.0,0.0,0.0,0.0
+Flow IAT Min,11.42,11.63,9.73,9.86,1.86,1.29
+Fwd Seg Size Min,40.0,40.0,0.0,0.0,0.0,0.0
+Fwd Pkt Len Std,0.0,0.0,0.0,0.0,0.0,0.0
