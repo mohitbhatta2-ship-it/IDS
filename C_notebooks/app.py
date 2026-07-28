@@ -27,7 +27,7 @@ import os
 # On Hugging Face Spaces: leave the env var unset entirely -- it automatically falls back
 # to a "data" folder placed right next to this script in the repo.
 _DEFAULT_LOCAL_PATH = r"M:\IDS\c_filesnew"
-_SCRIPT_RELATIVE_DATA = Path(__file__).parent / "webapp_data"
+_SCRIPT_RELATIVE_DATA = Path(__file__).parent / "data"
 
 if os.environ.get("NIDS_PROJECT_PATH"):
     PROJECT_PATH = Path(os.environ["NIDS_PROJECT_PATH"])
@@ -334,22 +334,6 @@ tabs = st.tabs([
 # ---------------------------------------------------------------------------
 with tabs[0]:
     st.header("Pipeline Overview")
-
-    with st.expander("🔧 Deployment diagnostics (path resolution check)"):
-        st.code(f"Resolved PROJECT_PATH: {PROJECT_PATH}")
-        st.code(f"PROJECT_PATH exists: {PROJECT_PATH.exists()}")
-        checks = {
-            "Processed_Data/label_mapping.csv": PROCESSED_DATA_PATH / "label_mapping.csv",
-            "Results/Models/ (folder)": MODELS_PATH,
-            "Results/Figures/ (folder)": FIGURES_PATH,
-            "Results/Tables/ (folder)": TABLES_PATH,
-        }
-        for label, path in checks.items():
-            st.write(f"{'✅' if path.exists() else '❌'} `{label}` → `{path}`")
-
-        if MODELS_PATH.exists():
-            st.write("Files found in Results/Models/:")
-            st.code("\n".join(f.name for f in sorted(MODELS_PATH.iterdir())[:20]) or "(empty folder)")
 
     col1, col2 = st.columns(2)
     with col1:
@@ -909,31 +893,24 @@ with tabs[6]:
                     run_sim = st.button("Generate & Detect", type="primary")
 
                 if run_sim:
-                    try:
-                        safe_name = next(k for k, v in safe_map.items() if v == chosen_class)
-                        synthetic = generate_synthetic_class_sample(safe_name, int(n_samples))
+                    safe_name = next(k for k, v in safe_map.items() if v == chosen_class)
+                    synthetic = generate_synthetic_class_sample(safe_name, int(n_samples))
 
-                        selected_features = load_selected_features()
-                        X_sim = synthetic[[c for c in selected_features if c in synthetic.columns]]
-                        X_sim_scaled = mlp_scaler.transform(X_sim)
+                    selected_features = load_selected_features()
+                    X_sim = synthetic[[c for c in selected_features if c in synthetic.columns]]
+                    X_sim_scaled = mlp_scaler.transform(X_sim)
 
-                        pred_encoded = mlp_model.predict(X_sim_scaled)
-                        pred_labels = [id_to_label_nn.get(p, str(p)) for p in pred_encoded]
+                    pred_encoded = mlp_model.predict(X_sim_scaled)
+                    pred_labels = [id_to_label_nn.get(p, str(p)) for p in pred_encoded]
 
-                        detected = sum(1 for p in pred_labels if p == chosen_class)
-                        detection_rate = detected / len(pred_labels) * 100
+                    detected = sum(1 for p in pred_labels if p == chosen_class)
+                    detection_rate = detected / len(pred_labels) * 100
 
-                        st.metric(
-                            f"MLP Detection Rate for '{chosen_class}'",
-                            f"{detection_rate:.1f}%",
-                            help=f"{detected} of {len(pred_labels)} generated samples correctly detected",
-                        )
+                    st.metric(
+                        f"MLP Detection Rate for '{chosen_class}'",
+                        f"{detection_rate:.1f}%",
+                        help=f"{detected} of {len(pred_labels)} generated samples correctly detected",
+                    )
 
-                        pred_counts = pd.Series(pred_labels).value_counts()
-                        st.bar_chart(pred_counts)
-                    except ModuleNotFoundError:
-                        st.error(
-                            "This feature needs the `ctgan` and `torch` packages to load the "
-                            "saved generator models, which aren't installed in this deployment. "
-                            "Everything else in the dashboard works normally without them."
-                        )
+                    pred_counts = pd.Series(pred_labels).value_counts()
+                    st.bar_chart(pred_counts)
