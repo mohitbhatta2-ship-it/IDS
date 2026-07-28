@@ -1,0 +1,16 @@
+Attack Name,Before CTGAN,After CTGAN
+Benign,680805,100000
+Bot,14293,14293
+Brute Force -Web,489,10000
+Brute Force -XSS,184,10000
+DDOS attack-HOIC,33844,33844
+DDOS attack-LOIC-UDP,1384,5536
+DDoS attacks-LOIC-HTTP,29171,29171
+DoS attacks-GoldenEye,2099,8396
+DoS attacks-Hulk,22017,22017
+DoS attacks-SlowHTTPTest,986,10000
+DoS attacks-Slowloris,521,10000
+FTP-BruteForce,1992,7968
+Infilteration,8197,10000
+SQL Injection,70,70
+SSH-Bruteforce,5940,10000

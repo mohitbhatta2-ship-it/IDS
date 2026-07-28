@@ -1,0 +1,12 @@
+{
+  "algorithm": "xgboost",
+  "xgb_n_estimators": 450,
+  "xgb_max_depth": 7,
+  "xgb_learning_rate": 0.05550577422563181,
+  "xgb_subsample": 0.7987037443111942,
+  "xgb_colsample_bytree": 0.8092432018765922,
+  "xgb_min_child_weight": 5,
+  "xgb_gamma": 2.6047899765715274,
+  "xgb_reg_alpha": 0.0002737535231961718,
+  "xgb_reg_lambda": 0.0006799175320975557
+}
