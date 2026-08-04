@@ -1,11 +1,15 @@
-import pandas as pd
 import pickle
 
-with open(r"M:\IDS\c_filesnew\Processed_Data\selected_features.pkl", "rb") as f:
+import pandas as pd
+
+import config
+
+with open(config.FEATURES_FILE, "rb") as f:
     FEATURE_ORDER = pickle.load(f)
 
 
 def preprocess_live(feature_dict):
+    """Turn a feature dict into a one-row frame with the exact training columns."""
 
     df = pd.DataFrame([feature_dict])
 

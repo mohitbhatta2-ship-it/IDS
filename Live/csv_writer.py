@@ -1,25 +1,18 @@
-import os
 import pandas as pd
 
-CSV_FILE = "live_flows.csv"
+import config
 
 
 def append_flow(features):
-
+    """Append one classified flow to the output CSV, writing a header if new."""
     df = pd.DataFrame([features])
 
-    if not os.path.exists(CSV_FILE):
+    path = config.CSV_FILE
+    path.parent.mkdir(parents=True, exist_ok=True)
 
-        df.to_csv(
-            CSV_FILE,
-            index=False
-        )
-
-    else:
-
-        df.to_csv(
-            CSV_FILE,
-            mode="a",
-            index=False,
-            header=False
-        )
+    df.to_csv(
+        path,
+        mode="a" if path.exists() else "w",
+        header=not path.exists(),
+        index=False,
+    )
