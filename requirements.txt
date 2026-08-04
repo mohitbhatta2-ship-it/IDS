@@ -5,3 +5,9 @@ scikit-learn
 xgboost
 joblib
 plotly
+scapy
+nfstream
+pytest
+scapy
+nfstream
+pytest
