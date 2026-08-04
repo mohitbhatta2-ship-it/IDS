@@ -1,0 +1,166 @@
+{% extends "predictor/base.html" %}
+{% block title %}Dataset results{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <h1>{{ filename }}</h1>
+  <p>
+    {{ result.rows }} rows classified with {{ result.model }}.
+    {% if evaluation %}
+      The file included a <code>Label</code> column, so the predictions were scored against it.
+    {% else %}
+      No <code>Label</code> column was present, so these are predictions only — add one to get accuracy and F1.
+    {% endif %}
+  </p>
+</div>
+
+<div style="display: grid; gap: 1.25rem; padding-bottom: 3rem;">
+
+  <div class="tiles">
+    <div class="tile">
+      <div class="k">Rows</div>
+      <div class="v">{{ result.rows }}</div>
+    </div>
+    <div class="tile accent-critical">
+      <div class="k">Attacks detected</div>
+      <div class="v">{{ result.attack_count }}</div>
+      <div class="s">{{ result.attack_share_pct|floatformat:1 }}% of traffic</div>
+    </div>
+    <div class="tile accent-good">
+      <div class="k">Benign</div>
+      <div class="v">{{ result.benign_count }}</div>
+    </div>
+    {% if evaluation %}
+      <div class="tile">
+        <div class="k">Accuracy</div>
+        <div class="v">{{ evaluation.accuracy|floatformat:4 }}</div>
+        <div class="s">{{ evaluation.correct }} correct</div>
+      </div>
+      <div class="tile">
+        <div class="k">Macro F1</div>
+        <div class="v">{{ evaluation.macro_f1|floatformat:4 }}</div>
+        <div class="s">all classes weighted equally</div>
+      </div>
+      <div class="tile">
+        <div class="k">Weighted F1</div>
+        <div class="v">{{ evaluation.weighted_f1|floatformat:4 }}</div>
+      </div>
+    {% endif %}
+  </div>
+
+  {% if result.bad_rows %}
+    <div class="notice is-info">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/>
+      </svg>
+      <span>{{ result.bad_rows }} row(s) had non-numeric or missing feature values. Those were filled with 0 before scoring.</span>
+    </div>
+  {% endif %}
+
+  <div class="layout" style="padding-bottom: 0;">
+    <div class="card">
+      <div class="card-head">
+        <h2>Predicted class distribution</h2>
+        <p>share of the {{ result.rows }} rows</p>
+      </div>
+      <div class="card-body">
+        <div class="bars">
+          {% for row in result.distribution %}
+            <div class="bar-row {% if row.is_attack %}is-attack{% else %}is-benign{% endif %}">
+              <div class="bar-meta">
+                <span class="name">{{ row.label }}</span>
+                <span class="value">{{ row.count }} · {{ row.share_pct|floatformat:1 }}%</span>
+              </div>
+              <div class="bar-track">
+                <div class="bar-fill" style="width: {{ row.bar_width|floatformat:2 }}%;"></div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <aside>
+      <div class="card">
+        <div class="card-head"><h2>Download</h2></div>
+        <div class="card-body">
+          <p style="font-size: .84rem; color: var(--ink-2); margin-bottom: .9rem;">
+            The original file with two extra columns: <code>Predicted Class</code> and
+            <code>Confidence</code>.
+          </p>
+          <a class="btn" href="{% url 'download_batch' download_token %}" style="width: 100%; justify-content: center;">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>
+            </svg>
+            Download predictions.csv
+          </a>
+          <a class="btn btn-ghost" href="{% url 'batch' %}" style="width: 100%; justify-content: center; margin-top: .6rem;">
+            Score another file
+          </a>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  {% if evaluation %}
+    <div class="card">
+      <div class="card-head">
+        <h2>Per-class performance</h2>
+        <p>ordered by how many rows of that class the file contained</p>
+      </div>
+      <div class="card-body">
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Class</th>
+                <th class="num">Support</th>
+                <th class="num">Precision</th>
+                <th class="num">Recall</th>
+                <th class="num">F1</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in evaluation.per_class %}
+                <tr>
+                  <td>
+                    <span class="pill {% if row.label == 'Benign' %}is-benign{% else %}is-attack{% endif %}">
+                      <span class="dot"></span>{{ row.label }}
+                    </span>
+                  </td>
+                  <td class="num">{{ row.support }}</td>
+                  <td class="num">{{ row.precision|floatformat:3 }}</td>
+                  <td class="num">{{ row.recall|floatformat:3 }}</td>
+                  <td class="num">{{ row.f1|floatformat:3 }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+  <div class="card">
+    <div class="card-head">
+      <h2>Preview</h2>
+      <p>first {{ preview_rows|length }} rows</p>
+    </div>
+    <div class="card-body">
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>{% for c in preview_columns %}<th {% if forloop.counter0 > 1 %}class="num"{% endif %}>{{ c }}</th>{% endfor %}</tr>
+          </thead>
+          <tbody>
+            {% for row in preview_rows %}
+              <tr>{% for cell in row %}<td {% if not forloop.first %}class="num"{% endif %}>{{ cell }}</td>{% endfor %}</tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

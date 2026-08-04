@@ -1,0 +1,85 @@
+{% extends "predictor/base.html" %}
+{% block title %}Single flow{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <h1>Classify a single network flow</h1>
+  <p>
+    Enter the 30 features the models were trained on and the classifier returns the traffic
+    class with its confidence. Load a preset to fill every field with a real flow taken from
+    the held-out test set.
+  </p>
+</div>
+
+<form id="flow-form" class="layout" novalidate>
+  {% csrf_token %}
+
+  <div class="card">
+    <div class="toolbar">
+      <div class="field" style="flex: 1 1 220px;">
+        <label for="model_key">Model</label>
+        <select name="model_key" id="model_key">
+          {% for m in models %}
+            <option value="{{ m.key }}" {% if m.key == default_model %}selected{% endif %}>
+              {{ m.name }} — macro F1 {{ m.macro_f1|floatformat:4 }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="field" style="flex: 1 1 240px;">
+        <label for="preset">Load an example flow</label>
+        <select id="preset">
+          <option value="">Choose a class…</option>
+          {% for name in preset_names %}<option value="{{ name }}">{{ name }}</option>{% endfor %}
+        </select>
+      </div>
+
+      <button type="button" class="btn btn-ghost btn-sm" id="fill-median">Fill with medians</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="clear-all">Clear</button>
+    </div>
+
+    <div class="card-body">
+      {% for group in groups %}
+        <section class="group">
+          <div class="group-head">
+            <h3>{{ group.title }}</h3>
+            <p>{{ group.description }}</p>
+          </div>
+          <div class="grid-fields">
+            {% for f in group.fields %}
+              <div class="field" data-field="{{ f.name }}">
+                <label for="id_{{ f.name }}" title="{{ f.name }}">{{ f.name }}</label>
+                <input type="number" step="{{ f.step }}" id="id_{{ f.name }}" name="{{ f.name }}"
+                       placeholder="{{ f.median|floatformat:'-2' }}" autocomplete="off">
+                <span class="field-hint">median {{ f.median|floatformat:'-2' }}</span>
+              </div>
+            {% endfor %}
+          </div>
+        </section>
+      {% endfor %}
+    </div>
+  </div>
+
+  <aside>
+    <div class="card sticky">
+      <div class="card-head">
+        <h2>Result</h2>
+      </div>
+      <div class="card-body">
+        <div id="verdict" class="verdict">
+          <p class="verdict-empty">
+            Fill in the features and run the classifier to see a prediction.
+          </p>
+        </div>
+
+        <button type="submit" class="btn" id="submit-btn" style="width: 100%; justify-content: center; margin-top: 1.1rem;">
+          Classify flow
+        </button>
+      </div>
+    </div>
+  </aside>
+</form>
+
+{{ presets|json_script:"presets-data" }}
+{% endblock %}
