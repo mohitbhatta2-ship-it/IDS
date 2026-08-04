@@ -1,0 +1,82 @@
+{% extends "predictor/base.html" %}
+{% block title %}Dataset{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <h1>Classify a whole dataset</h1>
+  <p>
+    Upload a CSV or Parquet file containing the 30 feature columns and every row is classified
+    at once. If the file also has a <code>Label</code> column it is treated as ground truth, so
+    you get real accuracy, macro F1 and a per-class breakdown rather than just predictions.
+  </p>
+</div>
+
+<div class="layout">
+  <div class="card">
+    <div class="card-head">
+      <h2>Upload</h2>
+    </div>
+    <div class="card-body">
+      {% if error %}
+        <div class="notice is-error" style="margin-bottom: 1rem;">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/>
+          </svg>
+          <span>{{ error }}</span>
+        </div>
+      {% endif %}
+
+      {% for field, errors in form.errors.items %}
+        <div class="notice is-error" style="margin-bottom: 1rem;">
+          <span>{{ errors|join:" " }}</span>
+        </div>
+      {% endfor %}
+
+      <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+
+        <label class="dropzone" data-dropzone>
+          <input type="file" name="dataset" accept=".csv,.parquet">
+          <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <path d="M7 9l5-5 5 5"/><path d="M12 4v12"/>
+          </svg>
+          <div class="primary">Drop a dataset here, or click to browse</div>
+          <div class="secondary" data-filename>CSV or Parquet · up to 256 MB</div>
+        </label>
+
+        <div class="field" style="margin-top: 1.1rem; max-width: 340px;">
+          <label for="model_key">Model</label>
+          <select name="model_key" id="model_key">
+            {% for m in models %}
+              <option value="{{ m.key }}" {% if m.key == default_model %}selected{% endif %}>
+                {{ m.name }} — macro F1 {{ m.macro_f1|floatformat:4 }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <button type="submit" class="btn" style="margin-top: 1.1rem;">Classify dataset</button>
+      </form>
+    </div>
+  </div>
+
+  <aside>
+    <div class="card">
+      <div class="card-head">
+        <h2>Required columns</h2>
+        <p>{{ features|length }} features</p>
+      </div>
+      <div class="card-body">
+        <p style="font-size: .82rem; color: var(--ink-2);">
+          Column names must match exactly. Extra columns are kept and returned untouched in the
+          download.
+        </p>
+        <div class="columns-list">
+          {% for f in features %}<code>{{ f }}</code>{% endfor %}
+        </div>
+      </div>
+    </div>
+  </aside>
+</div>
+{% endblock %}

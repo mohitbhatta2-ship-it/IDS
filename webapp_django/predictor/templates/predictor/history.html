@@ -1,0 +1,66 @@
+{% extends "predictor/base.html" %}
+{% block title %}History{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <h1>Prediction history</h1>
+  <p>Every classification run is recorded, so you can show what was tested and what came back.</p>
+</div>
+
+<div class="card" style="margin-bottom: 3rem;">
+  <div class="card-head">
+    <h2>{{ total }} run{{ total|pluralize }}</h2>
+    {% if total %}
+      <form method="post" action="{% url 'clear_history' %}" style="margin-left: auto;">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-ghost btn-sm">Clear history</button>
+      </form>
+    {% endif %}
+  </div>
+
+  {% if logs %}
+    <div class="card-body">
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>When</th>
+              <th>Type</th>
+              <th>Model</th>
+              <th>Result</th>
+              <th class="num">Rows</th>
+              <th class="num">Accuracy</th>
+              <th class="num">Macro F1</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for log in logs %}
+              <tr>
+                <td>{{ log.created_at|date:"j M Y, H:i" }}</td>
+                <td>{{ log.get_kind_display }}</td>
+                <td>{{ log.model_name }}</td>
+                <td>
+                  {% if log.kind == 'manual' %}
+                    <span class="pill {% if log.is_attack %}is-attack{% else %}is-benign{% endif %}">
+                      <span class="dot"></span>{{ log.predicted_label }}
+                    </span>
+                    <span style="color: var(--ink-muted); font-size: .76rem;">{{ log.confidence|floatformat:4 }}</span>
+                  {% else %}
+                    {{ log.source_filename }}
+                    <span style="color: var(--ink-muted); font-size: .76rem;">· {{ log.attack_count }} attacks</span>
+                  {% endif %}
+                </td>
+                <td class="num">{% if log.row_count %}{{ log.row_count }}{% else %}—{% endif %}</td>
+                <td class="num">{% if log.accuracy %}{{ log.accuracy|floatformat:4 }}{% else %}—{% endif %}</td>
+                <td class="num">{% if log.macro_f1 %}{{ log.macro_f1|floatformat:4 }}{% else %}—{% endif %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% else %}
+    <p class="empty">Nothing yet. Classify a flow or upload a dataset and it will show up here.</p>
+  {% endif %}
+</div>
+{% endblock %}
