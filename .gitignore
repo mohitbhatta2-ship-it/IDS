@@ -28,3 +28,6 @@ __pycache__/
 webapp_django/db.sqlite3
 webapp_django/media/
 webapp_django/staticfiles/
+
+# Large generated samples (regenerate from webapp_data/Processed_Data)
+sample_data/*20k*.csv

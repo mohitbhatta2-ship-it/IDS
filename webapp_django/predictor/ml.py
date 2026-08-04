@@ -19,6 +19,8 @@ import numpy as np
 import pandas as pd
 from django.conf import settings
 
+from . import column_mapping
+
 # ---------------------------------------------------------------------------
 # Locating the data bundle
 # ---------------------------------------------------------------------------
@@ -154,6 +156,10 @@ MODEL_REGISTRY: dict[str, dict] = {
 
 DEFAULT_MODEL = "histgradientboosting"
 
+# Below this many matched features the remainder would be invented from medians,
+# and the prediction would say more about the fill values than the data.
+MIN_MATCHED_FEATURES = 20
+
 _cache: dict[str, object] = {}
 _lock = threading.Lock()
 
@@ -280,13 +286,29 @@ def predict_batch(df: pd.DataFrame, model_key: str = DEFAULT_MODEL) -> dict:
     if df.empty:
         raise BatchError("The file has no rows.")
 
-    missing = [f for f in FEATURES if f not in df.columns]
-    if missing:
+    # Accept datasets that use CICFlowMeter's other naming conventions
+    # (CIC-IDS2017, the raw CSE-CIC-IDS2018 CSVs, headers with stray spaces)
+    # by mapping their columns onto ours before anything else.
+    df, mapping = column_mapping.map_columns(df, FEATURES)
+
+    if mapping["matched"] == 0:
         raise BatchError(
-            f"{len(missing)} of the 30 required feature columns are missing: "
-            + ", ".join(missing[:6])
-            + ("…" if len(missing) > 6 else "")
+            "None of the 30 required feature columns could be matched, even "
+            "allowing for alternative names. Is this a CICFlowMeter-style "
+            f"dataset? Columns found: {', '.join(map(str, df.columns[:8]))}…"
         )
+
+    if mapping["matched"] < MIN_MATCHED_FEATURES:
+        raise BatchError(
+            f"Only {mapping['matched']} of the {len(FEATURES)} required features "
+            f"could be matched, which is too few to classify meaningfully "
+            f"(at least {MIN_MATCHED_FEATURES} are needed). "
+            f"Missing: {', '.join(mapping['missing'][:6])}"
+            + ("…" if len(mapping["missing"]) > 6 else "")
+        )
+
+    if mapping["missing"]:
+        df = column_mapping.fill_missing(df, FEATURES, FEATURE_STATS)
 
     model, scaler = _load(model_key)
 
@@ -338,6 +360,7 @@ def predict_batch(df: pd.DataFrame, model_key: str = DEFAULT_MODEL) -> dict:
         "distribution": distribution,
         "frame": out,
         "evaluation": None,
+        "mapping": mapping,
     }
 
     if "Label" in df.columns:
