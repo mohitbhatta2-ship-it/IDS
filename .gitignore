@@ -28,3 +28,8 @@ __pycache__/
 webapp_django/db.sqlite3
 webapp_django/media/
 webapp_django/staticfiles/
+
+# Live capture output
+Live/live_flows.csv
+live_flows.csv
+**/Results/Tables/live_feature_parity.csv

@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
-import time
+from typing import Optional
+
 
 @dataclass
 class Flow:
@@ -11,9 +12,17 @@ class Flow:
     dst_port: int
     protocol: int
 
-    # Timing
-    start_time: float = field(default_factory=time.time)
-    last_seen: float = field(default_factory=time.time)
+    # Timing.
+    #
+    # Both are packet-capture timestamps, NOT wall-clock time. They used to
+    # default to time.time(), which is only harmless while sniffing live: as soon
+    # as you read a stored capture, start_time was "now" while last_seen came
+    # from the packet, so Flow Duration came out as the age of the capture file
+    # (years, for the 2018 dataset) and every IAT feature built on it was
+    # meaningless. They are set from the first packet instead -- see
+    # feature_extractor.update_flow.
+    start_time: Optional[float] = None
+    last_seen: Optional[float] = None
 
     # Packet counters
     total_packets: int = 0
@@ -48,8 +57,22 @@ class Flow:
     backward_header_lengths: list = field(default_factory=list)
 
     # TCP Window
-    init_fwd_win_bytes: int = None
+    init_fwd_win_bytes: Optional[int] = None
 
     # Segment sizes
     forward_segment_sizes: list = field(default_factory=list)
     backward_segment_sizes: list = field(default_factory=list)
+
+    @property
+    def duration(self) -> float:
+        """Flow duration in seconds, or 0.0 before any packet has been seen."""
+        if self.start_time is None or self.last_seen is None:
+            return 0.0
+        return float(self.last_seen) - float(self.start_time)
+
+    def __str__(self) -> str:
+        proto = {6: "TCP", 17: "UDP"}.get(self.protocol, str(self.protocol))
+        return (
+            f"{self.src_ip}:{self.src_port} -> {self.dst_ip}:{self.dst_port} "
+            f"[{proto}] {self.total_packets} pkts"
+        )
