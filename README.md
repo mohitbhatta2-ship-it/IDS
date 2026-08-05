@@ -137,13 +137,14 @@ retraining.
 | `sample_data/test_sample_no_labels.csv` | 3,561 | no | The same rows with labels stripped — predictions only |
 | `sample_data/foreign_dataset_ids2017_style.csv` | 3,561 | yes | Same data under CIC-IDS2017 column names — demonstrates the mapping layer |
 | `sample_data/per_attack/*.csv` | 500* | yes | One file per traffic class (15), for demonstrating a single attack |
-| `sample_data/per_attack/no_labels/*.csv` | 500* | no | The same rows without ground truth |
+| `sample_data/per_attack/no_labels/*_no_labels.csv` | 500* | no | The same rows without ground truth |
 
 <sub>* 500 where the data allows — SQL Injection has only 87 rows in the test set.</sub>
 
 Upload a **labelled** file to get Accuracy and Macro F1. The `no_labels/` copies
-have identical filenames and produce identical predictions, but no scores —
-there is no ground truth to score against.
+carry the same rows and produce byte-identical predictions, but no scores — there
+is no ground truth to score against. They are suffixed `_no_labels` so the two
+sets never look alike in a file picker.
 
 ---
 

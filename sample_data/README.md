@@ -14,7 +14,8 @@ models were never trained on.
 
 `per_attack/` holds one CSV per traffic class (15 files, 500 rows each where the
 data allows) for demonstrating a single attack at a time, with label-free copies
-of the same rows in `per_attack/no_labels/`. See
+of the same rows in `per_attack/no_labels/`, suffixed `_no_labels` so the two sets
+are never confusable in a file picker. See
 [`per_attack/README.md`](per_attack/README.md) for what each one actually
 predicts — 14 of the 15 read as their own class, and the exception is
 documented rather than hidden.

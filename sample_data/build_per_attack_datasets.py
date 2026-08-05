@@ -97,7 +97,11 @@ def main() -> int:
         # The identical rows without the ground-truth column. Predictions are
         # unaffected -- Label is never a model input -- so this pair also serves
         # as the check that no label leaks into the features.
-        path_nl = OUT_NO_LABELS / f"{slug(name)}.csv"
+        # The `_no_labels` suffix is not decoration. Both copies used to share a
+        # filename, so a file picker showed two identical `bot.csv` entries and
+        # the only difference was the directory -- which cost real time when an
+        # upload came back with no accuracy and the cause was the wrong folder.
+        path_nl = OUT_NO_LABELS / f"{slug(name)}_no_labels.csv"
         frame.drop(columns=["Label"]).to_csv(path_nl, index=False)
 
         rows.append(

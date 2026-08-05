@@ -6,10 +6,15 @@ specific attack rather than the mixed bag in `../test_sample_with_labels.csv`.
 
 Two sets of the same rows:
 
-| Folder | Columns | Use |
+| File | Columns | Use |
 |---|---|---|
-| `per_attack/` | 30 features + `Label` | The batch page also reports accuracy, macro F1 and the per-class table, so the upload doubles as an evaluation run. |
-| `per_attack/no_labels/` | 30 features only | What traffic of unknown origin looks like. Predictions only, no scoring. |
+| `per_attack/bot.csv` | 30 features + `Label` | The batch page also reports accuracy, macro F1 and the per-class table, so the upload doubles as an evaluation run. |
+| `per_attack/no_labels/bot_no_labels.csv` | 30 features only | What traffic of unknown origin looks like. Predictions only, no scoring. |
+
+The `_no_labels` suffix matters. Both sets once shared a filename, so a file
+picker offered two identical-looking `bot.csv` entries and the only thing telling
+them apart was the directory. Uploading the wrong one gives predictions with no
+accuracy and no obvious reason why.
 
 ## The `Label` column does not affect predictions
 
