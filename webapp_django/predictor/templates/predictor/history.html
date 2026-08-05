@@ -67,6 +67,12 @@
           </tbody>
         </table>
       </div>
+
+      <p style="font-size: .78rem; color: var(--ink-muted); margin-top: .9rem;">
+        Accuracy and Macro F1 need ground truth, so they are only recorded when the uploaded file
+        carried a <code>Label</code> column. Uploads without one, and manual entries — which classify
+        a single flow — show <span class="na">—</span> instead. Hover any dash for the reason.
+      </p>
     </div>
   {% else %}
     <p class="empty">Nothing yet. Classify a flow or upload a dataset and it will show up here.</p>
