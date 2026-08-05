@@ -46,6 +46,30 @@ class PredictionLog(models.Model):
         return bool(self.predicted_label) and self.predicted_label != "Benign"
 
     @property
+    def was_evaluated(self) -> bool:
+        """
+        True when the upload carried a usable Label column, so accuracy and
+        macro F1 were computed. Checked explicitly against None because a
+        genuinely poor run can score 0.0, which is a real result rather than
+        a missing one.
+        """
+        return self.accuracy is not None
+
+    @property
+    def blank_reason(self) -> str:
+        """Why this run has no evaluation scores, phrased for a tooltip."""
+        if self.kind == self.MANUAL:
+            return (
+                "Manual entries classify a single flow with no ground truth, "
+                "so there is nothing to score against."
+            )
+        return (
+            "This upload had no Label column, so there was no ground truth to "
+            "score the predictions against. Re-upload a file that includes one "
+            "to get accuracy and macro F1."
+        )
+
+    @property
     def attack_share(self) -> float:
         if not self.row_count:
             return 0.0
