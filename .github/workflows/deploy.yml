@@ -1,0 +1,74 @@
+name: Deploy to Render
+
+# Render's own auto-deploy does not fire for this service. It was created from a
+# Blueprint, and Blueprint-managed services deploy on a Blueprint sync rather
+# than on a push -- so merging to main left the live site on an old build with
+# no error anywhere to explain it. This calls Render's deploy hook instead.
+#
+# Setup (once):
+#   1. Render → the service → Settings → Deploy Hook → copy the URL
+#   2. gh secret set RENDER_DEPLOY_HOOK --repo mohitbhatta2-ship-it/IDS
+#      and paste it when prompted
+#
+# The URL contains a key, so it lives in a secret and is never printed.
+
+on:
+  push:
+    branches: [main]
+    # Only the things the deployed service actually serves. Editing a notebook
+    # or the Live/ capture module does not change the website, and rebuilding
+    # for those would just burn free-tier build minutes.
+    paths:
+      - "webapp_django/**"
+      - "webapp_data/Results/Models/**"
+      - "webapp_data/Processed_Data/**"
+      - "render.yaml"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:        # lets you trigger a deploy by hand from the Actions tab
+
+concurrency:
+  # If two merges land close together, only the newer deploy is worth running.
+  group: render-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Trigger Render deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Call the deploy hook
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${HOOK:-}" ]; then
+            echo "::error::RENDER_DEPLOY_HOOK is not set."
+            echo "Add it with: gh secret set RENDER_DEPLOY_HOOK --repo \${{ github.repository }}"
+            echo "The URL is under Render → service → Settings → Deploy Hook."
+            exit 1
+          fi
+
+          # -o/-w keeps the response body out of the URL line, so the hook key
+          # cannot end up in the log.
+          status=$(curl -sS -X POST -o response.json -w '%{http_code}' "$HOOK")
+          echo "Render responded with HTTP $status"
+          cat response.json || true
+          echo
+
+          case "$status" in
+            200|201) echo "Deploy queued." ;;
+            401|403) echo "::error::Render rejected the hook. Has it been regenerated?"; exit 1 ;;
+            *)       echo "::error::Unexpected response $status from Render."; exit 1 ;;
+          esac
+
+      - name: Where to watch it
+        run: |
+          echo "### Deploy triggered :rocket:" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Commit \`${GITHUB_SHA:0:7}\` — ${GITHUB_REF_NAME}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Build log: <https://dashboard.render.com/web/srv-d9p3fj7avr4c73ai80q0/deploys>" >> "$GITHUB_STEP_SUMMARY"
+          echo "Live site: <https://nids-ids2018.onrender.com>" >> "$GITHUB_STEP_SUMMARY"
