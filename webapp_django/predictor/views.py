@@ -1,17 +1,12 @@
 import json
-import uuid
-from pathlib import Path
 
-from django.conf import settings
-from django.http import FileResponse, Http404, JsonResponse
+from django.http import JsonResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_http_methods
 
 from . import classes, ml
 from .forms import BatchUploadForm, ManualFlowForm
 from .models import PredictionLog
-
-BATCH_OUTPUT_DIR = Path(settings.BASE_DIR) / "media" / "batch"
 
 
 def _base_context(active: str) -> dict:
@@ -163,9 +158,6 @@ def batch(request):
         return render(request, "predictor/batch.html", context)
 
     out_frame = result.pop("frame")
-    BATCH_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    token = uuid.uuid4().hex
-    out_frame.to_csv(BATCH_OUTPUT_DIR / f"{token}.csv", index=False)
 
     evaluation = result.get("evaluation")
     PredictionLog.objects.create(
@@ -188,24 +180,12 @@ def batch(request):
         {
             "result": result,
             "evaluation": evaluation,
-            "download_token": token,
             "filename": upload.name,
             "preview_columns": list(preview.columns),
             "preview_rows": list(preview.itertuples(index=False, name=None)),
         }
     )
     return render(request, "predictor/batch_result.html", context)
-
-
-def download_batch(request, token):
-    if len(token) != 32 or not all(c in "0123456789abcdef" for c in token):
-        raise Http404("Unknown download.")
-
-    path = BATCH_OUTPUT_DIR / f"{token}.csv"
-    if not path.is_file():
-        raise Http404("That result is no longer available.")
-
-    return FileResponse(path.open("rb"), as_attachment=True, filename="predictions.csv")
 
 
 # ---------------------------------------------------------------------------

@@ -132,49 +132,26 @@
     </div>
   </div>
 
-  <div class="layout" style="padding-bottom: 0;">
-    <div class="card">
-      <div class="card-head">
-        <h2>Predicted class distribution</h2>
-        <p>share of the {{ result.rows }} rows · colour shows the attack family</p>
-      </div>
-      <div class="card-body">
-        <div class="bars">
-          {% for row in result.distribution %}
-            <div class="bar-row fam-{{ row.family }}">
-              <div class="bar-meta">
-                <span class="name"><span class="bar-dot"></span>{{ row.label }}</span>
-                <span class="value">{{ row.count }} · {{ row.share_pct|floatformat:1 }}%</span>
-              </div>
-              <div class="bar-track">
-                <div class="bar-fill by-family" style="width: {{ row.bar_width|floatformat:2 }}%;"></div>
-              </div>
+  <div class="card">
+    <div class="card-head">
+      <h2>Predicted class distribution</h2>
+      <p>share of the {{ result.rows }} rows · colour shows the attack family</p>
+    </div>
+    <div class="card-body">
+      <div class="bars">
+        {% for row in result.distribution %}
+          <div class="bar-row fam-{{ row.family }}">
+            <div class="bar-meta">
+              <span class="name"><span class="bar-dot"></span>{{ row.label }}</span>
+              <span class="value">{{ row.count }} · {{ row.share_pct|floatformat:1 }}%</span>
             </div>
-          {% endfor %}
-        </div>
+            <div class="bar-track">
+              <div class="bar-fill by-family" style="width: {{ row.bar_width|floatformat:2 }}%;"></div>
+            </div>
+          </div>
+        {% endfor %}
       </div>
     </div>
-
-    <aside>
-      <div class="card">
-        <div class="card-head"><h2>Download</h2></div>
-        <div class="card-body">
-          <p style="font-size: .84rem; color: var(--ink-2); margin-bottom: .9rem;">
-            The original file with two extra columns: <code>Predicted Class</code> and
-            <code>Confidence</code>.
-          </p>
-          <a class="btn" href="{% url 'download_batch' download_token %}" style="width: 100%; justify-content: center;">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>
-            </svg>
-            Download predictions.csv
-          </a>
-          <a class="btn btn-ghost" href="{% url 'batch' %}" style="width: 100%; justify-content: center; margin-top: .6rem;">
-            Score another file
-          </a>
-        </div>
-      </div>
-    </aside>
   </div>
 
   {% if evaluation %}
