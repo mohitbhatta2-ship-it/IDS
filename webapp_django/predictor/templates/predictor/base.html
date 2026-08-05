@@ -28,7 +28,7 @@
 
   <header class="topbar">
     <div class="shell topbar-inner">
-      <a class="brand" href="{% url 'manual' %}">
+      <a class="brand" href="{% url 'home' %}">
         <span class="brand-mark" aria-hidden="true">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 2 4 5.5v6c0 4.7 3.2 8.9 8 10.5 4.8-1.6 8-5.8 8-10.5v-6L12 2Z"/>
@@ -42,6 +42,7 @@
       </a>
 
       <nav class="nav" aria-label="Main">
+        <a href="{% url 'home' %}" {% if active == 'home' %}class="is-active" aria-current="page"{% endif %}>Overview</a>
         <a href="{% url 'manual' %}" {% if active == 'manual' %}class="is-active" aria-current="page"{% endif %}>Single flow</a>
         <a href="{% url 'batch' %}" {% if active == 'batch' %}class="is-active" aria-current="page"{% endif %}>Dataset</a>
         <a href="{% url 'history' %}" {% if active == 'history' %}class="is-active" aria-current="page"{% endif %}>History</a>

@@ -1,0 +1,375 @@
+{% extends "predictor/base.html" %}
+{% block title %}Overview{% endblock %}
+
+{% block content %}
+
+{# ========================= Hero ========================= #}
+<section class="lp-hero">
+  <div class="lp-hero-copy">
+    <span class="lp-badge">
+      <span class="lp-badge-dot" aria-hidden="true"></span>
+      CSE-CIC-IDS2018 · {{ class_count }} traffic classes
+    </span>
+
+    <h1>Tell benign traffic from<br><em>an attack in progress.</em></h1>
+
+    <p class="lp-lead">
+      A network intrusion detection system built on the CSE-CIC-IDS2018 dataset. It takes the
+      {{ feature_count }} statistical features of a single network flow — durations, packet rates,
+      inter-arrival times, flag counts — and names the traffic: benign, or which of the
+      {{ class_count|add:"-1" }} attack types it matches, with a confidence for every class.
+    </p>
+
+    <div class="lp-cta">
+      <a class="btn" href="{% url 'manual' %}">
+        Classify a flow
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M5 12h14M13 6l6 6-6 6"/>
+        </svg>
+      </a>
+      <a class="btn btn-ghost" href="{% url 'batch' %}">Score a whole dataset</a>
+    </div>
+
+    <p class="lp-cta-note">
+      No setup needed — load one of the {{ class_count }} example flows from the held-out test set
+      and watch the model call it.
+    </p>
+  </div>
+
+  {# Decorative: a sensor watching a network, two hosts flagged. Hidden from AT. #}
+  <div class="lp-visual" aria-hidden="true">
+    <svg viewBox="0 0 480 420" role="presentation">
+      <defs>
+        <linearGradient id="lpSweep" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%"  stop-color="var(--series-1)" stop-opacity=".26"/>
+          <stop offset="100%" stop-color="var(--series-1)" stop-opacity="0"/>
+        </linearGradient>
+        <linearGradient id="lpCore" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%"  stop-color="#5aa2ff"/>
+          <stop offset="60%" stop-color="var(--series-1)"/>
+          <stop offset="100%" stop-color="#2560b5"/>
+        </linearGradient>
+      </defs>
+
+      <g class="lp-rings">
+        <circle cx="240" cy="210" r="72"/>
+        <circle cx="240" cy="210" r="120"/>
+        <circle cx="240" cy="210" r="168"/>
+      </g>
+
+      <g class="lp-sweep">
+        <path d="M240 210 L240 42 A168 168 0 0 1 384 128 Z" fill="url(#lpSweep)"/>
+      </g>
+
+      <g class="lp-links">
+        <line x1="240" y1="210" x2="240" y2="52"/>
+        <line x1="240" y1="210" x2="382" y2="126"/>
+        <line x1="240" y1="210" x2="404" y2="248"/>
+        <line x1="240" y1="210" x2="304" y2="360"/>
+        <line x1="240" y1="210" x2="164" y2="356"/>
+        <line x1="240" y1="210" x2="82"  y2="256"/>
+        <line x1="240" y1="210" x2="96"  y2="118"/>
+        <line x1="240" y1="210" x2="312" y2="252"/>
+        <line x1="240" y1="210" x2="172" y2="150"/>
+      </g>
+
+      <g class="lp-nodes">
+        <g class="lp-node fam-benign"><circle cx="240" cy="52"  r="6.5"/></g>
+        <g class="lp-node fam-benign"><circle cx="382" cy="126" r="6.5"/></g>
+        <g class="lp-node fam-benign"><circle cx="304" cy="360" r="6.5"/></g>
+        <g class="lp-node fam-benign"><circle cx="82"  cy="256" r="6.5"/></g>
+        <g class="lp-node fam-benign"><circle cx="96"  cy="118" r="6.5"/></g>
+        <g class="lp-node fam-benign"><circle cx="312" cy="252" r="5.5"/></g>
+        <g class="lp-node fam-benign"><circle cx="172" cy="150" r="5.5"/></g>
+
+        <g class="lp-node is-alert fam-ddos">
+          <circle class="halo" cx="404" cy="248" r="9" fill="none"/>
+          <circle cx="404" cy="248" r="8"/>
+        </g>
+        <g class="lp-node is-alert fam-other">
+          <circle class="halo" cx="164" cy="356" r="9" fill="none"/>
+          <circle cx="164" cy="356" r="7.5"/>
+        </g>
+      </g>
+
+      <g class="lp-core">
+        <circle cx="240" cy="210" r="44" fill="url(#lpCore)"/>
+        <g transform="translate(240 210) scale(1.5) translate(-12 -12)"
+           fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2 4 5.5v6c0 4.7 3.2 8.9 8 10.5 4.8-1.6 8-5.8 8-10.5v-6L12 2Z"/>
+          <path d="m9 12 2 2 4-4"/>
+        </g>
+      </g>
+    </svg>
+  </div>
+</section>
+
+{# ========================= Numbers ========================= #}
+<section class="lp-stats">
+  <div class="lp-stat">
+    <span class="n">481,793</span>
+    <span class="k">Labelled flows</span>
+    <span class="s">281,295 train · 200,498 held-out test</span>
+  </div>
+  <div class="lp-stat">
+    <span class="n">{{ class_count }}</span>
+    <span class="k">Traffic classes</span>
+    <span class="s">Benign plus {{ class_count|add:"-1" }} attack types, in 6 families</span>
+  </div>
+  <div class="lp-stat">
+    <span class="n">{{ feature_count }}</span>
+    <span class="k">Selected features</span>
+    <span class="s">Cut from 80, grouped into {{ group_count }} clusters</span>
+  </div>
+  <div class="lp-stat">
+    <span class="n">98.0<i>%</i></span>
+    <span class="k">Test accuracy</span>
+    <span class="s">0.863 macro F1 across all {{ class_count }} classes</span>
+  </div>
+</section>
+
+{# ========================= Pipeline ========================= #}
+<section class="lp-section">
+  <div class="lp-section-head">
+    <h2>How a flow becomes a verdict</h2>
+    <p>The same five steps run whether the flow is typed in by hand, read from a CSV, or captured live off an interface.</p>
+  </div>
+
+  <ol class="lp-flow">
+    <li class="lp-step">
+      <span class="n">1</span>
+      <div class="lp-step-body">
+        <h3>Capture</h3>
+        <p>Packets are grouped into bidirectional flows keyed on the 5-tuple, and closed on FIN or timeout.</p>
+      </div>
+    </li>
+    <li class="lp-step">
+      <span class="n">2</span>
+      <div class="lp-step-body">
+        <h3>Extract</h3>
+        <p>Each flow is reduced to {{ feature_count }} numbers: duration, rates, inter-arrival gaps, header and flag counts.</p>
+      </div>
+    </li>
+    <li class="lp-step">
+      <span class="n">3</span>
+      <div class="lp-step-body">
+        <h3>Align</h3>
+        <p>Column names are mapped to the training schema, infinities and gaps repaired, order fixed.</p>
+      </div>
+    </li>
+    <li class="lp-step">
+      <span class="n">4</span>
+      <div class="lp-step-body">
+        <h3>Classify</h3>
+        <p>A tuned gradient-boosting model scores all {{ class_count }} classes — scaling applied first for the MLP.</p>
+      </div>
+    </li>
+    <li class="lp-step">
+      <span class="n">5</span>
+      <div class="lp-step-body">
+        <h3>Report</h3>
+        <p>The top class, its family and the full probability spread, logged to history for later review.</p>
+      </div>
+    </li>
+  </ol>
+</section>
+
+{# ========================= What it detects ========================= #}
+<section class="lp-section">
+  <div class="lp-section-head">
+    <h2>What it detects</h2>
+    <p>
+      Fifteen classes is more than colour can carry, so they are grouped into six families.
+      Hue tells you the shape of the threat; the class name beside it gives the detail.
+    </p>
+  </div>
+
+  <div class="family-grid">
+    {% for fam in families %}
+      <div class="family-card fam-{{ fam.key }}">
+        <h4><span class="swatch"></span>{{ fam.name }}<span class="lp-fam-count">{{ fam.count }}</span></h4>
+        <p>{{ fam.blurb }}</p>
+        <div class="members">
+          {% for m in fam.members %}<code>{{ m }}</code>{% endfor %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+
+{# ========================= Models ========================= #}
+<section class="lp-section">
+  <div class="lp-section-head">
+    <h2>Three models, scored on the same held-out set</h2>
+    <p>
+      Accuracy alone hides the rare classes — a model can score 98% while missing SQL injection entirely.
+      Macro F1 weights every class equally, so it is the number that decides the default.
+    </p>
+  </div>
+
+  <div class="lp-models">
+    {% for m in scorecards %}
+      <article class="lp-model {% if m.is_default %}is-default{% endif %}">
+        <header>
+          <h3>{{ m.name }}</h3>
+          {% if m.is_default %}<span class="lp-tag">Default</span>{% endif %}
+        </header>
+        <p class="lp-model-blurb">{{ m.blurb }}</p>
+
+        <div class="lp-metric fam-bruteforce">
+          <div class="bar-meta">
+            <span class="name">Accuracy</span>
+            <span class="value">{{ m.accuracy|floatformat:4 }}</span>
+          </div>
+          <div class="bar-track"><div class="bar-fill by-family" style="width: {{ m.acc_pct|floatformat:2 }}%"></div></div>
+        </div>
+
+        <div class="lp-metric fam-web">
+          <div class="bar-meta">
+            <span class="name">Macro F1</span>
+            <span class="value">{{ m.macro_f1|floatformat:4 }}</span>
+          </div>
+          <div class="bar-track"><div class="bar-fill by-family" style="width: {{ m.f1_pct|floatformat:2 }}%"></div></div>
+        </div>
+      </article>
+    {% endfor %}
+  </div>
+
+  <p class="lp-footnote">
+    Scores come from the tuned runs on the full 281,295-row training set, all measured against the
+    same 200,498 held-out rows. You can switch model per prediction on either tool page.
+  </p>
+</section>
+
+{# ========================= Ways in ========================= #}
+<section class="lp-section">
+  <div class="lp-section-head">
+    <h2>Three ways to use it</h2>
+    <p>Same models, same feature contract — the difference is only how the flows arrive.</p>
+  </div>
+
+  <div class="lp-uses">
+    <a class="lp-use" href="{% url 'manual' %}">
+      <span class="lp-use-icon fam-bruteforce" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 17h4l3-9 3 14 3-11h3"/>
+        </svg>
+      </span>
+      <h3>Single flow</h3>
+      <p>
+        Type or paste the {{ feature_count }} features of one flow and get an instant verdict with a
+        confidence ring and the full class spread. Load a real example from the test set to see it work.
+      </p>
+      <span class="lp-use-go">Open the classifier →</span>
+    </a>
+
+    <a class="lp-use" href="{% url 'batch' %}">
+      <span class="lp-use-icon fam-web" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 5h18M3 12h18M3 19h18"/>
+        </svg>
+      </span>
+      <h3>Whole dataset</h3>
+      <p>
+        Upload a CSV or Parquet of flows and score every row at once. You get the family breakdown,
+        a preview table and a CSV of predictions — plus accuracy and macro F1 if the file carries labels.
+      </p>
+      <span class="lp-use-go">Upload a file →</span>
+    </a>
+
+    <div class="lp-use is-static">
+      <span class="lp-use-icon fam-dos" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 20h.01"/><path d="M8.5 16.4a5 5 0 0 1 7 0"/><path d="M5 12.9a10 10 0 0 1 14 0"/><path d="M1.5 9.4a15 15 0 0 1 21 0"/>
+        </svg>
+      </span>
+      <h3>Live capture</h3>
+      <p>
+        The <code>Live/</code> module sniffs a real interface, assembles flows in memory and scores them as
+        they close — the same feature contract, computed from packets instead of read from a file.
+      </p>
+      <span class="lp-use-go is-muted">Runs from the command line</span>
+    </div>
+  </div>
+</section>
+
+{# ========================= Under the hood ========================= #}
+<section class="lp-section">
+  <div class="lp-section-head">
+    <h2>How it was built</h2>
+    <p>Each stage lives in its own notebook, so any number on this page can be traced back to the run that produced it.</p>
+  </div>
+
+  <div class="lp-work">
+    <div class="lp-work-item">
+      <h3>Cleaning &amp; feature selection</h3>
+      <p>
+        Duplicate and infinite rows dropped, {{ class_count }} classes consolidated, then the feature set
+        cut from 80 columns to the {{ feature_count }} that actually carry signal.
+      </p>
+    </div>
+    <div class="lp-work-item">
+      <h3>CTGAN for the rare classes</h3>
+      <p>
+        SQL Injection and the web attacks are a few dozen rows against millions of benign ones. Synthetic
+        samples were generated per class and checked column-by-column against the real distribution.
+      </p>
+    </div>
+    <div class="lp-work-item">
+      <h3>Optuna tuning</h3>
+      <p>
+        Hyperparameters for each model were searched with Optuna and frozen to JSON, so every later run
+        reuses the exact same configuration.
+      </p>
+    </div>
+    <div class="lp-work-item">
+      <h3>Data-size scaling study</h3>
+      <p>
+        All models retrained at 25k / 100k / 281k rows with frozen hyperparameters and one fixed test set,
+        isolating the effect of data volume alone.
+      </p>
+    </div>
+  </div>
+</section>
+
+{# ========================= Closing CTA ========================= #}
+<section class="lp-close">
+  <div class="lp-close-inner">
+    <h2>See it call a real attack</h2>
+    <p>Load a DDoS or brute-force flow from the held-out test set — no data of your own required.</p>
+    <div class="lp-cta">
+      <a class="btn" href="{% url 'manual' %}">Classify a flow</a>
+      <a class="btn btn-ghost" href="{% url 'history' %}">Browse past predictions</a>
+    </div>
+  </div>
+</section>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Reveal-on-scroll. The class is added from here rather than in the markup,
+  // so with scripting off (or reduced motion on) everything simply renders.
+  (function () {
+    if (!('IntersectionObserver' in window)) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    var targets = document.querySelectorAll(
+      '.lp-stat, .lp-step, .family-card, .lp-model, .lp-use, .lp-work-item, .lp-close-inner'
+    );
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add('is-in');
+        io.unobserve(entry.target);
+      });
+    }, { rootMargin: '0px 0px -6% 0px', threshold: 0.06 });
+
+    targets.forEach(function (el, i) {
+      el.classList.add('lp-reveal');
+      el.style.transitionDelay = (i % 4) * 60 + 'ms';
+      io.observe(el);
+    });
+  })();
+</script>
+{% endblock %}
