@@ -152,8 +152,8 @@ the three most likely classes.
 row is classified. If the file also carries a `Label` column it is treated as
 ground truth and the page additionally reports accuracy, macro F1, weighted F1
 and a per-class precision/recall/F1 table — so an upload doubles as an evaluation
-run rather than merely a prediction run. The annotated file is downloadable with
-`Predicted Class` and `Confidence` appended.
+run rather than merely a prediction run. Each row is annotated with
+`Predicted Class` and `Confidence`, shown in the preview table.
 
 **History.** Every run is recorded through the Django ORM and listed with its
 model, result and scores.
@@ -217,7 +217,7 @@ These were found during review of the existing code and remain present on `main`
 | `Live/flow.py`, `Live/feature_extractor.py` | `start_time` is taken from the wall clock while `last_seen` comes from packet timestamps. The difference is negligible during live capture but makes flow duration and every inter-arrival feature meaningless when replaying a stored capture. |
 | `Live/sniff_test.py:23` | `cleanup_flows()` is called for every packet and iterates the entire flow table each time. |
 | `Live/validate_live_features.py:3` | Reads `train_selected.csv`, which does not exist — the repository stores Parquet. |
-| Repository | No README, no tests, and `webapp_data/` largely duplicates `c_filesnew/`. |
+| Repository | `webapp_data/` largely duplicates `c_filesnew/`. (The missing README and tests noted here have since been added: `README.md`, and 17 tests in `webapp_django/predictor/tests.py`.) |
 
 ### Feature parity — the largest open risk
 
