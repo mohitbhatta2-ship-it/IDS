@@ -23,6 +23,39 @@ def _base_context(active: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Landing page — a standing overview of the project
+# ---------------------------------------------------------------------------
+
+
+def home(request):
+    """
+    Static overview. Nothing here touches a model, so the page renders even on a
+    machine where the .pkl files have not been pulled from LFS -- the scorecards
+    read from the registry rather than from disk.
+    """
+    context = _base_context("home")
+    context.update(
+        {
+            "families": classes.legend(),
+            "feature_count": len(ml.FEATURES),
+            "group_count": len(ml.FEATURE_GROUPS),
+            "class_count": len(ml.LABELS),
+            "scorecards": [
+                {
+                    "key": key,
+                    "acc_pct": 100.0 * spec["accuracy"],
+                    "f1_pct": 100.0 * spec["macro_f1"],
+                    "is_default": key == ml.DEFAULT_MODEL,
+                    **spec,
+                }
+                for key, spec in ml.MODEL_REGISTRY.items()
+            ],
+        }
+    )
+    return render(request, "predictor/home.html", context)
+
+
+# ---------------------------------------------------------------------------
 # Manual entry — one flow, 30 features
 # ---------------------------------------------------------------------------
 
