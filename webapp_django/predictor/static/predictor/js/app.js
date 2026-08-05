@@ -113,39 +113,85 @@
     }
   }
 
+  function ring(fraction, family) {
+    // Confidence as a stroke-dashoffset arc. Built with createElementNS because
+    // innerHTML does not work for SVG children.
+    const NS = "http://www.w3.org/2000/svg";
+    const R = 44, C = 2 * Math.PI * R;
+
+    const wrap = el("div", "ring " + family);
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("viewBox", "0 0 104 104");
+    svg.setAttribute("width", "104");
+    svg.setAttribute("height", "104");
+
+    ["track", "value"].forEach(function (role) {
+      const c = document.createElementNS(NS, "circle");
+      c.setAttribute("cx", "52"); c.setAttribute("cy", "52"); c.setAttribute("r", String(R));
+      c.setAttribute("fill", "none"); c.setAttribute("stroke-width", "9");
+      c.setAttribute("class", role);
+      if (role === "value") {
+        c.setAttribute("stroke-dasharray", String(C));
+        c.setAttribute("stroke-dashoffset", String(C));
+        requestAnimationFrame(function () {
+          c.setAttribute("stroke-dashoffset", String(C * (1 - Math.max(fraction, 0.005))));
+        });
+      }
+      svg.appendChild(c);
+    });
+
+    wrap.appendChild(svg);
+
+    const label = el("div", "ring-label");
+    label.appendChild(el("div", "n", (fraction * 100).toFixed(1)));
+    label.appendChild(el("div", "u", "percent"));
+    wrap.appendChild(label);
+    return wrap;
+  }
+
   function renderResult(data) {
     verdict.replaceChildren();
+    const fam = "fam-" + data.family;
 
-    // Verdict banner — colour is always paired with an icon and the class name,
-    // never carrying the meaning on its own.
-    var banner = el("div", "verdict-banner " + (data.is_attack ? "is-attack" : "is-benign"));
-    banner.appendChild(el("span", "dot"));
+    // Hero: family colour as a wash and a left rule, class name in text, family
+    // named on the chip. Colour never carries the meaning by itself.
+    const hero = el("div", "verdict-hero " + fam);
+    const top = el("div", "verdict-hero-top");
+    const chip = el("span", "fam-chip");
+    chip.appendChild(el("span", "swatch"));
+    chip.appendChild(el("span", null, data.family_name));
+    top.appendChild(chip);
+    hero.appendChild(top);
+    hero.appendChild(el("div", "verdict-class", data.label));
+    hero.appendChild(el("div", "verdict-sub",
+      data.is_attack ? "Attack traffic detected" : "Normal traffic — nothing to action"));
+    verdict.appendChild(hero);
 
-    var textWrap = el("div");
-    textWrap.appendChild(el("div", "label", data.label));
-    textWrap.appendChild(el("div", "sub", data.is_attack ? "Attack traffic" : "Normal traffic"));
-    banner.appendChild(textWrap);
-    verdict.appendChild(banner);
+    const rw = el("div", "ring-wrap");
+    rw.appendChild(ring(data.confidence, fam));
+    const note = el("div", "ring-note");
+    const strong = el("strong", null, "Confidence");
+    note.appendChild(strong);
+    note.appendChild(el("div", null, "how sure the model is about this class"));
+    note.appendChild(el("div", "field-hint", data.model));
+    rw.appendChild(note);
+    verdict.appendChild(rw);
 
-    var conf = el("div");
-    conf.appendChild(el("div", "field-label", "Confidence"));
-    conf.appendChild(el("div", "confidence-value", percent(data.confidence)));
-    conf.appendChild(el("div", "field-hint", "predicted by " + data.model));
-    verdict.appendChild(conf);
+    const bars = el("div", "bars");
+    data.top.forEach(function (row) {
+      const rowFam = "fam-" + row.family;
+      const barRow = el("div", "bar-row " + rowFam);
 
-    // Top-3 probabilities as a single-series bar chart with direct labels.
-    var bars = el("div", "bars");
-    data.top.forEach(function (row, i) {
-      var isBenign = row.label === "Benign";
-      var barRow = el("div", "bar-row " + (i === 0 ? (isBenign ? "is-benign" : "is-attack") : ""));
-
-      var meta = el("div", "bar-meta");
-      meta.appendChild(el("span", "name", row.label));
+      const meta = el("div", "bar-meta");
+      const name = el("span", "name");
+      name.appendChild(el("span", "bar-dot"));
+      name.appendChild(el("span", null, row.label));
+      meta.appendChild(name);
       meta.appendChild(el("span", "value", percent(row.confidence)));
       barRow.appendChild(meta);
 
-      var track = el("div", "bar-track");
-      var fill = el("div", "bar-fill");
+      const track = el("div", "bar-track");
+      const fill = el("div", "bar-fill by-family");
       fill.style.width = "0%";
       track.appendChild(fill);
       barRow.appendChild(track);
@@ -156,7 +202,7 @@
       });
     });
 
-    var barsWrap = el("div");
+    const barsWrap = el("div");
     barsWrap.appendChild(el("div", "field-label", "Most likely classes"));
     barsWrap.appendChild(bars);
     verdict.appendChild(barsWrap);

@@ -359,3 +359,157 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
 }
+
+/* ==========================================================================
+   Attack-family colours
+   Hue carries the family; the class name is always shown alongside. Values are
+   validated in both modes -- see predictor/classes.py before changing any.
+   ========================================================================== */
+
+:root {
+  --family-benign:     #0ca30c;
+  --family-ddos:       #e34948;
+  --family-bruteforce: #2a78d6;
+  --family-dos:        #eb6834;
+  --family-web:        #4a3aa7;
+  --family-other:      #eda100;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --family-benign:     #0ca30c;
+    --family-ddos:       #e66767;
+    --family-bruteforce: #3987e5;
+    --family-dos:        #d95926;
+    --family-web:        #9085e9;
+    --family-other:      #c98500;
+  }
+}
+:root[data-theme="dark"] {
+  --family-benign:     #0ca30c;
+  --family-ddos:       #e66767;
+  --family-bruteforce: #3987e5;
+  --family-dos:        #d95926;
+  --family-web:        #9085e9;
+  --family-other:      #c98500;
+}
+
+.fam-benign     { --fam: var(--family-benign); }
+.fam-ddos       { --fam: var(--family-ddos); }
+.fam-bruteforce { --fam: var(--family-bruteforce); }
+.fam-dos        { --fam: var(--family-dos); }
+.fam-web        { --fam: var(--family-web); }
+.fam-other      { --fam: var(--family-other); }
+
+/* ---------- Verdict hero ---------- */
+
+.verdict-hero {
+  position: relative; overflow: hidden;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  padding: 1.35rem 1.4rem;
+  background:
+    linear-gradient(135deg,
+      color-mix(in srgb, var(--fam) 16%, transparent) 0%,
+      color-mix(in srgb, var(--fam) 4%, transparent) 55%,
+      transparent 100%),
+    var(--surface-sunk);
+}
+.verdict-hero::before {
+  content: ""; position: absolute; inset: 0 auto 0 0; width: 4px; background: var(--fam);
+}
+.verdict-hero-top { display: flex; align-items: center; gap: .6rem; margin-bottom: .5rem; }
+.verdict-class {
+  font-size: 1.32rem; font-weight: 680; letter-spacing: -.018em;
+  line-height: 1.2; color: var(--ink);
+}
+.verdict-sub { font-size: .82rem; color: var(--ink-2); margin-top: .3rem; }
+
+.fam-chip {
+  display: inline-flex; align-items: center; gap: .4rem;
+  padding: .18rem .55rem .18rem .45rem; border-radius: 999px;
+  font-size: .715rem; font-weight: 650; letter-spacing: .025em; text-transform: uppercase;
+  color: var(--fam);
+  background: color-mix(in srgb, var(--fam) 13%, transparent);
+  border: 1px solid color-mix(in srgb, var(--fam) 34%, transparent);
+  white-space: nowrap;
+}
+.fam-chip .swatch { width: 8px; height: 8px; border-radius: 2.5px; background: var(--fam); flex: none; }
+
+/* ---------- Confidence ring ---------- */
+
+.ring-wrap { display: flex; align-items: center; gap: 1.1rem; }
+.ring { position: relative; width: 104px; height: 104px; flex: none; }
+.ring svg { transform: rotate(-90deg); display: block; }
+.ring .track { stroke: var(--line); }
+.ring .value {
+  stroke: var(--fam); stroke-linecap: round;
+  transition: stroke-dashoffset .85s cubic-bezier(.22, 1, .36, 1);
+}
+.ring-label {
+  position: absolute; inset: 0; display: grid; place-content: center; text-align: center;
+}
+.ring-label .n {
+  font-size: 1.32rem; font-weight: 680; letter-spacing: -.02em; color: var(--ink);
+  font-variant-numeric: tabular-nums; line-height: 1;
+}
+.ring-label .u { font-size: .62rem; color: var(--ink-muted); text-transform: uppercase; letter-spacing: .07em; margin-top: .18rem; }
+.ring-note { font-size: .8rem; color: var(--ink-2); }
+.ring-note strong { color: var(--ink); font-weight: 620; }
+
+/* ---------- Family-coloured bars ---------- */
+
+.bar-fill.by-family { background: var(--fam); }
+.bar-row .bar-dot {
+  width: 8px; height: 8px; border-radius: 2.5px; background: var(--fam);
+  flex: none; margin-right: .45rem;
+}
+.bar-meta .name { display: inline-flex; align-items: center; min-width: 0; }
+
+/* ---------- Family composition bar ---------- */
+
+.composition {
+  display: flex; width: 100%; height: 34px; gap: 2px;
+  border-radius: var(--radius-sm); overflow: hidden;
+  background: var(--surface-sunk); border: 1px solid var(--line);
+}
+.composition span {
+  background: var(--fam); position: relative;
+  transition: filter .15s;
+  min-width: 3px;
+}
+.composition span:hover { filter: brightness(1.15); }
+.composition span:first-child { border-radius: 6px 0 0 6px; }
+.composition span:last-child { border-radius: 0 6px 6px 0; }
+
+.legend { display: flex; flex-wrap: wrap; gap: .45rem; margin-top: .9rem; }
+.legend-item {
+  display: inline-flex; align-items: center; gap: .45rem;
+  padding: .32rem .6rem; border-radius: var(--radius-sm);
+  border: 1px solid var(--border); background: var(--surface-sunk);
+  font-size: .78rem; color: var(--ink-2);
+}
+.legend-item .swatch { width: 9px; height: 9px; border-radius: 3px; background: var(--fam); flex: none; }
+.legend-item b { color: var(--ink); font-weight: 620; font-variant-numeric: tabular-nums; }
+
+/* ---------- Family reference grid ---------- */
+
+.family-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(232px, 1fr)); gap: .7rem; }
+.family-card {
+  padding: .8rem .9rem; border-radius: var(--radius-sm);
+  background: var(--surface-sunk);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--fam);
+}
+.family-card h4 { margin: 0 0 .15rem; font-size: .85rem; font-weight: 640; color: var(--ink); display: flex; align-items: center; gap: .4rem; }
+.family-card h4 .swatch { width: 9px; height: 9px; border-radius: 3px; background: var(--fam); }
+.family-card p { font-size: .76rem; color: var(--ink-muted); line-height: 1.45; }
+.family-card .members { margin-top: .45rem; display: flex; flex-wrap: wrap; gap: .22rem; }
+.family-card .members code {
+  font-size: .66rem; padding: .08rem .34rem; border-radius: 4px;
+  background: var(--surface); border: 1px solid var(--line); color: var(--ink-2);
+}
+
+/* Threat tile accent */
+.tile.by-family { border-left: 3px solid var(--fam); }
+.tile.by-family .v { color: var(--fam); }

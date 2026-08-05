@@ -7,7 +7,7 @@ from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_http_methods
 
-from . import ml
+from . import classes, ml
 from .forms import BatchUploadForm, ManualFlowForm
 from .models import PredictionLog
 
@@ -51,6 +51,7 @@ def manual(request):
             "groups": _form_groups(),
             "presets": ml.PRESETS,
             "preset_names": sorted(ml.PRESETS.keys()),
+            "families": classes.legend(),
         }
     )
     return render(request, "predictor/manual.html", context)

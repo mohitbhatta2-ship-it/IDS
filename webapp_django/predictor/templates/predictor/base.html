@@ -1,10 +1,10 @@
-{% load static %}<!doctype html>
+{% load static asset_tags %}<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}NIDS{% endblock %} — CSE-CIC-IDS2018 Intrusion Detection</title>
-  <link rel="stylesheet" href="{% static 'predictor/css/app.css' %}">
+  <link rel="stylesheet" href="{% static_v 'predictor/css/app.css' %}">
   <script>
     // Applied before first paint so the page never flashes the wrong theme.
     (function () {
@@ -59,7 +59,7 @@
     </div>
   </footer>
 
-  <script src="{% static 'predictor/js/app.js' %}"></script>
+  <script src="{% static_v 'predictor/js/app.js' %}"></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

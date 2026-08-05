@@ -19,7 +19,7 @@ import numpy as np
 import pandas as pd
 from django.conf import settings
 
-from . import column_mapping
+from . import classes, column_mapping
 
 # ---------------------------------------------------------------------------
 # Locating the data bundle
@@ -248,6 +248,10 @@ def predict_one(values: dict, model_key: str = DEFAULT_MODEL, top_n: int = 3) ->
     ]
     top = ranked[:top_n] if ranked else [{"label": _label_for(model, order[0]), "confidence": 0.0}]
 
+    for row in ranked:
+        row["family"] = classes.family_of(row["label"])
+        row["family_name"] = classes.family_name(row["label"])
+
     verdict = top[0]
     return {
         "model": MODEL_REGISTRY[model_key]["name"],
@@ -255,6 +259,8 @@ def predict_one(values: dict, model_key: str = DEFAULT_MODEL, top_n: int = 3) ->
         "label": verdict["label"],
         "confidence": verdict["confidence"],
         "is_attack": verdict["label"] != BENIGN_LABEL,
+        "family": classes.family_of(verdict["label"]),
+        "family_name": classes.family_name(verdict["label"]),
         "top": top,
         "all": ranked,
     }
@@ -343,6 +349,8 @@ def predict_batch(df: pd.DataFrame, model_key: str = DEFAULT_MODEL) -> dict:
             "share_pct": 100.0 * int(r.count) / total,
             "bar_width": max(100.0 * int(r.count) / top_count, 0.6),
             "is_attack": r.label != BENIGN_LABEL,
+            "family": classes.family_of(r.label),
+            "family_name": classes.family_name(r.label),
         }
         for r in counts.itertuples()
     ]
@@ -358,6 +366,7 @@ def predict_batch(df: pd.DataFrame, model_key: str = DEFAULT_MODEL) -> dict:
         "benign_count": total - attack_count,
         "attack_share_pct": 100.0 * attack_count / total,
         "distribution": distribution,
+        "families": classes.summarise(dict(zip(counts["label"], counts["count"]))),
         "frame": out,
         "evaluation": None,
         "mapping": mapping,
@@ -388,20 +397,22 @@ def _evaluate(truth: pd.Series, predicted: np.ndarray) -> dict | None:
     if truth.isna().all() or not set(truth) & set(LABELS.values()):
         return None
 
-    classes = sorted(set(truth) | set(predicted))
+    # NB: do not name this `classes` -- that shadows the classes module.
+    label_set = sorted(set(truth) | set(predicted))
     report = classification_report(
-        truth, predicted, labels=classes, output_dict=True, zero_division=0
+        truth, predicted, labels=label_set, output_dict=True, zero_division=0
     )
 
     per_class = [
         {
             "label": c,
+            "family": classes.family_of(c),
             "f1": report[c]["f1-score"],
             "precision": report[c]["precision"],
             "recall": report[c]["recall"],
             "support": int(report[c]["support"]),
         }
-        for c in classes
+        for c in label_set
         if c in report and report[c]["support"] > 0
     ]
     per_class.sort(key=lambda r: r["support"], reverse=True)

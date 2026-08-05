@@ -108,22 +108,46 @@
     </div>
   {% endif %}
 
+  <div class="card">
+    <div class="card-head">
+      <h2>Threat composition</h2>
+      <p>every row, grouped by attack family</p>
+    </div>
+    <div class="card-body">
+      <div class="composition">
+        {% for fam in result.families %}
+          <span class="fam-{{ fam.key }}" style="flex: {{ fam.count }} 1 0;"
+                title="{{ fam.name }} — {{ fam.count }} rows ({{ fam.share_pct|floatformat:1 }}%)"></span>
+        {% endfor %}
+      </div>
+      <div class="legend">
+        {% for fam in result.families %}
+          <span class="legend-item fam-{{ fam.key }}">
+            <span class="swatch"></span>
+            {{ fam.name }} <b>{{ fam.count }}</b>
+            <span style="color: var(--ink-muted);">{{ fam.share_pct|floatformat:1 }}%</span>
+          </span>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
   <div class="layout" style="padding-bottom: 0;">
     <div class="card">
       <div class="card-head">
         <h2>Predicted class distribution</h2>
-        <p>share of the {{ result.rows }} rows</p>
+        <p>share of the {{ result.rows }} rows · colour shows the attack family</p>
       </div>
       <div class="card-body">
         <div class="bars">
           {% for row in result.distribution %}
-            <div class="bar-row {% if row.is_attack %}is-attack{% else %}is-benign{% endif %}">
+            <div class="bar-row fam-{{ row.family }}">
               <div class="bar-meta">
-                <span class="name">{{ row.label }}</span>
+                <span class="name"><span class="bar-dot"></span>{{ row.label }}</span>
                 <span class="value">{{ row.count }} · {{ row.share_pct|floatformat:1 }}%</span>
               </div>
               <div class="bar-track">
-                <div class="bar-fill" style="width: {{ row.bar_width|floatformat:2 }}%;"></div>
+                <div class="bar-fill by-family" style="width: {{ row.bar_width|floatformat:2 }}%;"></div>
               </div>
             </div>
           {% endfor %}
@@ -175,7 +199,7 @@
               {% for row in evaluation.per_class %}
                 <tr>
                   <td>
-                    <span class="pill {% if row.label == 'Benign' %}is-benign{% else %}is-attack{% endif %}">
+                    <span class="pill fam-{{ row.family }}" style="color: var(--fam);">
                       <span class="dot"></span>{{ row.label }}
                     </span>
                   </td>

@@ -98,3 +98,32 @@ class PredictBatchTests(TestCase):
     def test_empty_file_is_rejected(self):
         with self.assertRaises(ml.BatchError):
             ml.predict_batch(pd.DataFrame())
+
+
+class EvaluationTests(TestCase):
+    """The Label path was not covered before, which let a shadowed import through."""
+
+    def _labelled(self, n=8):
+        import numpy as np
+        rng = np.random.default_rng(0)
+        df = pd.DataFrame({f: rng.normal(100, 20, n) for f in ml.FEATURES})
+        df["Label"] = ["Benign", "Bot"] * (n // 2)
+        return df
+
+    def test_evaluation_runs_and_carries_family_on_each_class(self):
+        result = ml.predict_batch(self._labelled())
+        ev = result["evaluation"]
+        self.assertIsNotNone(ev)
+        self.assertIn("accuracy", ev)
+        for row in ev["per_class"]:
+            self.assertIn("family", row)
+            self.assertIn(row["family"], {"benign", "ddos", "dos", "bruteforce", "web", "other"})
+
+    def test_families_roll_up_to_the_row_count(self):
+        result = ml.predict_batch(self._labelled())
+        self.assertEqual(sum(f["count"] for f in result["families"]), result["rows"])
+
+    def test_numeric_labels_are_mapped_to_names(self):
+        df = self._labelled()
+        df["Label"] = [0, 1] * (len(df) // 2)
+        self.assertIsNotNone(ml.predict_batch(df)["evaluation"])
