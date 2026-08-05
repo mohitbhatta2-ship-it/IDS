@@ -141,3 +141,30 @@ class EvaluationTests(TestCase):
         df = self._labelled()
         df["Label"] = [0, 1] * (len(df) // 2)
         self.assertIsNotNone(ml.predict_batch(df)["evaluation"])
+
+    def test_label_values_survive_a_spreadsheet_round_trip(self):
+        """Trailing spaces and case changes must not silently disable scoring."""
+        for mangled in ("Benign ", " benign", "BENIGN", "benign"):
+            with self.subTest(label=mangled):
+                df = self._labelled()
+                df["Label"] = mangled
+                self.assertIsNotNone(
+                    ml.predict_batch(df)["evaluation"],
+                    f"{mangled!r} should still be recognised as Benign",
+                )
+
+    def test_an_unreadable_label_column_is_reported_as_such(self):
+        """Not the same thing as having no Label column, and must not look like it."""
+        df = self._labelled()
+        df["Label"] = "not-a-class-name"
+        result = ml.predict_batch(df)
+
+        self.assertIsNone(result["evaluation"])
+        self.assertTrue(result["has_label_column"])
+        self.assertIn("not-a-class-name", result["label_unusable"])
+
+    def test_a_missing_label_column_is_distinguishable_from_an_unreadable_one(self):
+        result = ml.predict_batch(self._labelled().drop(columns=["Label"]))
+        self.assertIsNone(result["evaluation"])
+        self.assertFalse(result["has_label_column"])
+        self.assertIsNone(result["label_unusable"])
