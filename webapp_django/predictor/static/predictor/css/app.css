@@ -763,3 +763,111 @@ tbody tr:hover { background: color-mix(in srgb, var(--ink) 3.5%, transparent); }
   body::before { display: none; }
   .card, .tile, .verdict-hero, .ring-wrap, .bars, .composition span { animation: none !important; }
 }
+
+/* ==========================================================================
+   Ambient backdrop
+   A slow drifting aurora over a faint network grid. Deliberately cool-toned
+   (blue/violet/teal) so it never competes with the warm attack-family hues —
+   red and orange still read as the loudest things on screen.
+   ========================================================================== */
+
+:root {
+  --page: #f6f7fb;                 /* was flat #f9f9f7 — a touch cooler */
+  --orb-a: rgba(42, 120, 214, .30);
+  --orb-b: rgba(74, 58, 167, .22);
+  --orb-c: rgba(27, 175, 122, .18);
+  --grid-line: rgba(11, 11, 11, .05);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --page: #07080d;               /* deep blue-black rather than neutral */
+    --orb-a: rgba(57, 135, 229, .30);
+    --orb-b: rgba(144, 133, 233, .22);
+    --orb-c: rgba(25, 158, 112, .16);
+    --grid-line: rgba(255, 255, 255, .045);
+  }
+}
+:root[data-theme="dark"] {
+  --page: #07080d;
+  --orb-a: rgba(57, 135, 229, .30);
+  --orb-b: rgba(144, 133, 233, .22);
+  --orb-c: rgba(25, 158, 112, .16);
+  --grid-line: rgba(255, 255, 255, .045);
+}
+
+/* The old flat mesh is replaced by the layered backdrop below. */
+body::before { content: none; }
+
+.bg {
+  position: fixed; inset: 0; z-index: -1;
+  overflow: hidden; pointer-events: none;
+}
+
+/* Network grid — thematically apt, and it gives the blur something to sit on.
+   Masked so it fades out toward the edges instead of stopping abruptly. */
+.bg-grid {
+  position: absolute; inset: -2px;
+  background-image:
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 46px 46px;
+  mask-image: radial-gradient(120% 95% at 50% 0%, #000 35%, transparent 78%);
+  -webkit-mask-image: radial-gradient(120% 95% at 50% 0%, #000 35%, transparent 78%);
+}
+
+.bg-orb {
+  position: absolute; border-radius: 50%;
+  filter: blur(90px);
+  will-change: transform;
+}
+.orb-1 {
+  width: 46rem; height: 34rem; top: -14rem; left: -10rem;
+  background: var(--orb-a);
+  animation: drift1 34s ease-in-out infinite alternate;
+}
+.orb-2 {
+  width: 40rem; height: 30rem; top: -6rem; right: -12rem;
+  background: var(--orb-b);
+  animation: drift2 42s ease-in-out infinite alternate;
+}
+.orb-3 {
+  width: 38rem; height: 28rem; bottom: -16rem; left: 30%;
+  background: var(--orb-c);
+  animation: drift3 50s ease-in-out infinite alternate;
+}
+
+@keyframes drift1 {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to   { transform: translate3d(7rem, 4rem, 0) scale(1.12); }
+}
+@keyframes drift2 {
+  from { transform: translate3d(0, 0, 0) scale(1.06); }
+  to   { transform: translate3d(-6rem, 6rem, 0) scale(1); }
+}
+@keyframes drift3 {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to   { transform: translate3d(-8rem, -5rem, 0) scale(1.15); }
+}
+
+/* A single slow sweep across the top — a nod to a radar/monitoring display,
+   kept faint enough that it reads as light rather than as a moving object. */
+.bg-scan {
+  position: absolute; inset: 0;
+  background: linear-gradient(100deg,
+    transparent 42%,
+    color-mix(in srgb, var(--series-1) 8%, transparent) 50%,
+    transparent 58%);
+  background-size: 260% 100%;
+  animation: sweep 14s linear infinite;
+}
+@keyframes sweep {
+  from { background-position: 130% 0; }
+  to   { background-position: -130% 0; }
+}
+
+/* Give the sticky bar a hairline of light so it separates from the backdrop */
+.topbar { border-bottom-color: color-mix(in srgb, var(--ink) 10%, transparent); }
+
+@media (prefers-reduced-motion: reduce) {
+  .bg-orb, .bg-scan { animation: none !important; }
+}
