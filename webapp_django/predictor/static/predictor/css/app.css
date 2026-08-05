@@ -513,3 +513,253 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 /* Threat tile accent */
 .tile.by-family { border-left: 3px solid var(--fam); }
 .tile.by-family .v { color: var(--fam); }
+
+/* ==========================================================================
+   Visual layer — depth, motion, glow.
+   Semantics are untouched: family hue still carries meaning and every mark
+   keeps its text label. This is only about making it feel built.
+   ========================================================================== */
+
+:root {
+  --ease: cubic-bezier(.22, 1, .36, 1);
+  --glass: rgba(252, 252, 251, .72);
+  --glass-line: rgba(11, 11, 11, .07);
+  --mesh-1: rgba(42, 120, 214, .10);
+  --mesh-2: rgba(74, 58, 167, .08);
+  --mesh-3: rgba(12, 163, 12, .06);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --glass: rgba(26, 26, 25, .68);
+    --glass-line: rgba(255, 255, 255, .08);
+    --mesh-1: rgba(57, 135, 229, .16);
+    --mesh-2: rgba(144, 133, 233, .12);
+    --mesh-3: rgba(12, 163, 12, .08);
+  }
+}
+:root[data-theme="dark"] {
+  --glass: rgba(26, 26, 25, .68);
+  --glass-line: rgba(255, 255, 255, .08);
+  --mesh-1: rgba(57, 135, 229, .16);
+  --mesh-2: rgba(144, 133, 233, .12);
+  --mesh-3: rgba(12, 163, 12, .08);
+}
+
+/* Ambient mesh behind everything */
+body::before {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(50rem 34rem at 12% -8%,  var(--mesh-1), transparent 60%),
+    radial-gradient(44rem 30rem at 88% 4%,   var(--mesh-2), transparent 62%),
+    radial-gradient(40rem 28rem at 52% 108%, var(--mesh-3), transparent 60%);
+}
+
+/* Glass cards with a lift on hover */
+.card {
+  background: var(--glass);
+  backdrop-filter: blur(18px) saturate(1.35);
+  -webkit-backdrop-filter: blur(18px) saturate(1.35);
+  border-color: var(--glass-line);
+  transition: transform .3s var(--ease), box-shadow .3s var(--ease);
+}
+.card:hover { box-shadow: 0 2px 4px rgba(11,11,11,.05), 0 18px 44px rgba(11,11,11,.09); }
+
+.topbar {
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  backdrop-filter: blur(16px) saturate(1.3);
+  -webkit-backdrop-filter: blur(16px) saturate(1.3);
+}
+
+/* Brand mark gets dimension */
+.brand-mark {
+  background: linear-gradient(140deg, #4f9bff, var(--series-1) 55%, #2a5fb0);
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--series-1) 40%, transparent),
+              inset 0 1px 0 rgba(255,255,255,.28);
+}
+
+/* ---------- Page header ---------- */
+
+.page-head { padding: 2.6rem 0 1.6rem; }
+.page-head h1 {
+  font-size: clamp(1.6rem, 3.1vw, 2.15rem); font-weight: 700; letter-spacing: -.028em;
+  background: linear-gradient(180deg, var(--ink) 30%, color-mix(in srgb, var(--ink) 62%, transparent));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+
+/* ---------- Stat tiles ---------- */
+
+.tile {
+  position: relative; overflow: hidden;
+  background: linear-gradient(160deg,
+    color-mix(in srgb, var(--surface) 92%, transparent),
+    var(--surface-sunk));
+  transition: transform .25s var(--ease), border-color .25s var(--ease);
+}
+.tile:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--ink) 16%, transparent); }
+.tile .v { font-size: 1.85rem; letter-spacing: -.03em; }
+.tile::after {
+  content: ""; position: absolute; right: -28px; top: -28px;
+  width: 84px; height: 84px; border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--series-1) 13%, transparent), transparent 70%);
+}
+.tile.accent-critical::after { background: radial-gradient(circle, color-mix(in srgb, var(--critical) 17%, transparent), transparent 70%); }
+.tile.accent-good::after     { background: radial-gradient(circle, color-mix(in srgb, var(--good) 17%, transparent), transparent 70%); }
+
+/* ---------- Verdict hero ---------- */
+
+.verdict-hero {
+  padding: 1.55rem 1.5rem;
+  background:
+    radial-gradient(24rem 12rem at 88% -30%, color-mix(in srgb, var(--fam) 30%, transparent), transparent 70%),
+    linear-gradient(135deg,
+      color-mix(in srgb, var(--fam) 17%, transparent) 0%,
+      color-mix(in srgb, var(--fam) 5%, transparent) 58%,
+      transparent 100%),
+    var(--surface-sunk);
+  box-shadow: 0 12px 34px -14px color-mix(in srgb, var(--fam) 48%, transparent),
+              inset 0 1px 0 color-mix(in srgb, #fff 9%, transparent);
+  animation: heroIn .5s var(--ease) both;
+}
+.verdict-hero::before { width: 5px; box-shadow: 0 0 18px 1px color-mix(in srgb, var(--fam) 65%, transparent); }
+.verdict-class { font-size: 1.45rem; }
+
+@keyframes heroIn {
+  from { opacity: 0; transform: translateY(10px) scale(.985); }
+  to   { opacity: 1; transform: none; }
+}
+
+.fam-chip {
+  backdrop-filter: blur(6px);
+  box-shadow: 0 1px 6px color-mix(in srgb, var(--fam) 24%, transparent);
+}
+.fam-chip .swatch { box-shadow: 0 0 7px color-mix(in srgb, var(--fam) 85%, transparent); }
+
+/* ---------- Confidence ring ---------- */
+
+.ring {
+  width: 116px; height: 116px;
+  /* The arc gradient's stops are currentColor, so the family hue has to reach
+     it through `color` -- setting only --fam leaves the ring rendering in the
+     inherited text colour. */
+  color: var(--fam);
+}
+.ring svg { filter: drop-shadow(0 0 9px color-mix(in srgb, var(--fam) 42%, transparent)); }
+.ring .value { stroke: url(#ringGrad); }
+.ring-label .n { font-size: 1.5rem; }
+.ring-wrap { animation: fadeUp .5s .1s var(--ease) both; }
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(9px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ---------- Bars ---------- */
+
+.bars { animation: fadeUp .5s .18s var(--ease) both; }
+.bar-track {
+  height: 10px;
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  border-color: transparent;
+}
+.bar-fill.by-family {
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--fam) 72%, transparent), var(--fam));
+  box-shadow: 0 0 12px -1px color-mix(in srgb, var(--fam) 58%, transparent);
+}
+.bar-row.is-top .bar-fill, .bar-row.is-attack .bar-fill, .bar-row.is-benign .bar-fill {
+  box-shadow: 0 0 12px -1px color-mix(in srgb, currentColor 45%, transparent);
+}
+.bar-dot { box-shadow: 0 0 7px color-mix(in srgb, var(--fam) 80%, transparent); }
+
+/* ---------- Composition bar ---------- */
+
+.composition { height: 40px; border: 0; padding: 0; background: transparent; }
+.composition span {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--fam) 88%, #fff 12%), var(--fam));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.2),
+              0 5px 16px -7px color-mix(in srgb, var(--fam) 75%, transparent);
+  transition: transform .22s var(--ease), filter .22s var(--ease);
+  animation: growX .65s var(--ease) both;
+  transform-origin: left center;
+}
+.composition span:hover { transform: scaleY(1.14); filter: brightness(1.12); z-index: 2; }
+
+@keyframes growX { from { transform: scaleX(0); } to { transform: none; } }
+
+.legend-item { transition: transform .2s var(--ease), border-color .2s var(--ease); }
+.legend-item:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--fam) 50%, transparent);
+}
+.legend-item .swatch { box-shadow: 0 0 8px color-mix(in srgb, var(--fam) 70%, transparent); }
+
+/* ---------- Family cards ---------- */
+
+.family-card {
+  border-left-width: 4px;
+  transition: transform .25s var(--ease), box-shadow .25s var(--ease);
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--fam) 8%, transparent), var(--surface-sunk) 60%);
+}
+.family-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 14px 30px -16px color-mix(in srgb, var(--fam) 70%, transparent);
+}
+.family-card h4 .swatch { box-shadow: 0 0 8px color-mix(in srgb, var(--fam) 75%, transparent); }
+
+/* ---------- Buttons ---------- */
+
+.btn {
+  background: linear-gradient(140deg, #5aa2ff, var(--series-1) 58%, #2560b5);
+  box-shadow: 0 4px 14px -4px color-mix(in srgb, var(--series-1) 62%, transparent),
+              inset 0 1px 0 rgba(255,255,255,.24);
+  transition: transform .18s var(--ease), box-shadow .18s var(--ease), filter .18s;
+}
+.btn:hover { transform: translateY(-1px); box-shadow: 0 8px 22px -6px color-mix(in srgb, var(--series-1) 70%, transparent), inset 0 1px 0 rgba(255,255,255,.24); }
+.btn:active { transform: translateY(0); }
+.btn-ghost { background: var(--surface); box-shadow: none; }
+.btn-ghost:hover { box-shadow: none; transform: translateY(-1px); }
+
+/* ---------- Inputs ---------- */
+
+input[type="number"], select {
+  transition: border-color .18s, box-shadow .18s, background .18s;
+}
+input[type="number"]:hover, select:hover { border-color: color-mix(in srgb, var(--series-1) 45%, var(--line-strong)); }
+input[type="number"]:focus {
+  border-color: var(--series-1);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--series-1) 18%, transparent);
+}
+.field.filled input[type="number"] { background: color-mix(in srgb, var(--series-1) 5%, var(--surface)); }
+
+/* ---------- Dropzone ---------- */
+
+.dropzone { transition: border-color .2s, background .2s, transform .2s var(--ease); }
+.dropzone:hover, .dropzone.is-over {
+  transform: translateY(-2px);
+  background: color-mix(in srgb, var(--series-1) 6%, var(--surface-sunk));
+  box-shadow: 0 14px 34px -20px color-mix(in srgb, var(--series-1) 80%, transparent);
+}
+
+/* ---------- Tables ---------- */
+
+tbody tr { transition: background .15s; }
+tbody tr:hover { background: color-mix(in srgb, var(--ink) 3.5%, transparent); }
+
+/* ---------- Staggered card entrance ---------- */
+
+.card { animation: fadeUp .5s var(--ease) both; }
+.card:nth-of-type(2) { animation-delay: .05s; }
+.card:nth-of-type(3) { animation-delay: .1s; }
+.tiles .tile { animation: fadeUp .45s var(--ease) both; }
+.tiles .tile:nth-child(2) { animation-delay: .04s; }
+.tiles .tile:nth-child(3) { animation-delay: .08s; }
+.tiles .tile:nth-child(4) { animation-delay: .12s; }
+.tiles .tile:nth-child(5) { animation-delay: .16s; }
+.tiles .tile:nth-child(6) { animation-delay: .2s; }
+
+@media (prefers-reduced-motion: reduce) {
+  body::before { display: none; }
+  .card, .tile, .verdict-hero, .ring-wrap, .bars, .composition span { animation: none !important; }
+}

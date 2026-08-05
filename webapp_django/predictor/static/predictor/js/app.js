@@ -32,6 +32,33 @@
     return node;
   }
 
+  // requestAnimationFrame never fires while a tab is in the background, so a
+  // page opened in a background tab would keep its bars at 0% and its ring
+  // empty. Fall back to a timer when the document is hidden.
+  function nextFrame(fn) {
+    if (document.visibilityState === "hidden") { setTimeout(fn, 0); return; }
+    requestAnimationFrame(fn);
+  }
+
+  function countUp(node, target, duration) {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
+        document.visibilityState === "hidden") {
+      node.textContent = target.toFixed(1);
+      return;
+    }
+    const start = performance.now();
+    (function step(now) {
+      const t = Math.min((now - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - t, 3);
+      node.textContent = (target * eased).toFixed(1);
+      if (t < 1) requestAnimationFrame(step);
+    })(start);
+  }
+
+  function markFilled(input) {
+    input.closest(".field").classList.toggle("filled", input.value.trim() !== "");
+  }
+
   function cookie(name) {
     var match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
     return match ? decodeURIComponent(match[2]) : "";
@@ -56,8 +83,14 @@
       var v = getter(input);
       input.value = v === null || v === undefined ? "" : v;
       input.closest(".field").classList.remove("has-error");
+      markFilled(input);
     });
   }
+
+  inputs().forEach(function (i) {
+    markFilled(i);
+    i.addEventListener("input", function () { markFilled(i); });
+  });
 
   var presetSelect = document.getElementById("preset");
   if (presetSelect) {
@@ -122,8 +155,25 @@
     const wrap = el("div", "ring " + family);
     const svg = document.createElementNS(NS, "svg");
     svg.setAttribute("viewBox", "0 0 104 104");
-    svg.setAttribute("width", "104");
-    svg.setAttribute("height", "104");
+    svg.setAttribute("width", "116");
+    svg.setAttribute("height", "116");
+
+    // Gradient along the arc, from a translucent form of the family colour to
+    // the solid one, so the ring reads as filling rather than as a flat band.
+    const defs = document.createElementNS(NS, "defs");
+    const grad = document.createElementNS(NS, "linearGradient");
+    grad.setAttribute("id", "ringGrad");
+    grad.setAttribute("x1", "0"); grad.setAttribute("y1", "0");
+    grad.setAttribute("x2", "1"); grad.setAttribute("y2", "1");
+    [["0%", ".45"], ["55%", ".85"], ["100%", "1"]].forEach(function (p) {
+      const stop = document.createElementNS(NS, "stop");
+      stop.setAttribute("offset", p[0]);
+      stop.setAttribute("stop-color", "currentColor");
+      stop.setAttribute("stop-opacity", p[1]);
+      grad.appendChild(stop);
+    });
+    defs.appendChild(grad);
+    svg.appendChild(defs);
 
     ["track", "value"].forEach(function (role) {
       const c = document.createElementNS(NS, "circle");
@@ -133,7 +183,7 @@
       if (role === "value") {
         c.setAttribute("stroke-dasharray", String(C));
         c.setAttribute("stroke-dashoffset", String(C));
-        requestAnimationFrame(function () {
+        nextFrame(function () {
           c.setAttribute("stroke-dashoffset", String(C * (1 - Math.max(fraction, 0.005))));
         });
       }
@@ -143,9 +193,12 @@
     wrap.appendChild(svg);
 
     const label = el("div", "ring-label");
-    label.appendChild(el("div", "n", (fraction * 100).toFixed(1)));
+    const n = el("div", "n", "0.0");
+    label.appendChild(n);
     label.appendChild(el("div", "u", "percent"));
     wrap.appendChild(label);
+
+    countUp(n, fraction * 100, 850);
     return wrap;
   }
 
@@ -197,7 +250,7 @@
       barRow.appendChild(track);
       bars.appendChild(barRow);
 
-      requestAnimationFrame(function () {
+      nextFrame(function () {
         fill.style.width = Math.max(row.confidence * 100, 0.6) + "%";
       });
     });
