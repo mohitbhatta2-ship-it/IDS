@@ -36,3 +36,6 @@ live_flows.csv
 
 # Large generated samples (regenerate from webapp_data/Processed_Data)
 sample_data/*20k*.csv
+
+# macOS folder metadata
+.DS_Store

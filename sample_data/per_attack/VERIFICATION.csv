@@ -1,0 +1,16 @@
+file,true_class,rows,top_prediction,top_share_pct,correct_pct,mean_confidence,distinct_predictions,reads_as_own_class,confusion
+benign.csv,Benign,500,Benign,98.4,98.4,0.952,2,True,Infilteration 1.6%
+bot.csv,Bot,500,Bot,100.0,100.0,1.0,1,True,-
+brute_force_web.csv,Brute Force -Web,500,Brute Force -Web,97.8,97.8,0.976,4,True,Benign 1.8%; SQL Injection 0.2%; Brute Force -XSS 0.2%
+brute_force_xss.csv,Brute Force -XSS,500,Brute Force -XSS,99.4,99.4,0.993,3,True,Brute Force -Web 0.4%; Benign 0.2%
+ddos_attack_hoic.csv,DDOS attack-HOIC,500,DDOS attack-HOIC,100.0,100.0,1.0,1,True,-
+ddos_attack_loic_udp.csv,DDOS attack-LOIC-UDP,500,DDOS attack-LOIC-UDP,99.2,99.2,0.992,2,True,DDoS attacks-LOIC-HTTP 0.8%
+ddos_attacks_loic_http.csv,DDoS attacks-LOIC-HTTP,500,DDoS attacks-LOIC-HTTP,100.0,100.0,1.0,1,True,-
+dos_attacks_goldeneye.csv,DoS attacks-GoldenEye,500,DoS attacks-GoldenEye,100.0,100.0,1.0,1,True,-
+dos_attacks_hulk.csv,DoS attacks-Hulk,500,DoS attacks-Hulk,100.0,100.0,1.0,1,True,-
+dos_attacks_slowhttptest.csv,DoS attacks-SlowHTTPTest,500,DoS attacks-SlowHTTPTest,73.6,73.6,0.854,2,True,FTP-BruteForce 26.4%
+dos_attacks_slowloris.csv,DoS attacks-Slowloris,500,DoS attacks-Slowloris,99.6,99.6,0.999,2,True,Benign 0.4%
+ftp_bruteforce.csv,FTP-BruteForce,500,FTP-BruteForce,88.4,88.4,0.762,2,True,DoS attacks-SlowHTTPTest 11.6%
+infilteration.csv,Infilteration,500,Benign,63.8,36.2,0.782,2,False,Benign 63.8%
+sql_injection.csv,SQL Injection,87,SQL Injection,81.6,81.6,0.938,5,True,Brute Force -Web 10.3%; Benign 3.4%; Brute Force -XSS 3.4%; Infilteration 1.1%
+ssh_bruteforce.csv,SSH-Bruteforce,500,SSH-Bruteforce,100.0,100.0,1.0,1,True,-
