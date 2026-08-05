@@ -1,13 +1,17 @@
-streamlit
+# Notebooks and the Live traffic module.
+# The web app has its own pinned set in webapp_django/requirements.txt.
 pandas
 numpy
 scikit-learn
 xgboost
 joblib
+matplotlib
 plotly
+pyarrow
+optuna
+
+# Live traffic capture
 scapy
-nfstream
-pytest
-scapy
-nfstream
+
+# Tests
 pytest
