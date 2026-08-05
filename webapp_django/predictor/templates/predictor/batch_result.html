@@ -8,6 +8,10 @@
     {{ result.rows }} rows classified with {{ result.model }}.
     {% if evaluation %}
       The file included a <code>Label</code> column, so the predictions were scored against it.
+    {% elif result.label_unusable %}
+      A <code>Label</code> column was present but none of its values matched the 15 known class
+      names, so there was nothing to score against. Found:
+      {% for v in result.label_unusable %}<code>{{ v }}</code>{% if not forloop.last %}, {% endif %}{% endfor %}.
     {% else %}
       No <code>Label</code> column was present, so these are predictions only — add one to get accuracy and F1.
     {% endif %}

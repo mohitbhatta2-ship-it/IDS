@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import pickle
+import re
 import threading
 from pathlib import Path
 
@@ -368,13 +369,28 @@ def predict_batch(df: pd.DataFrame, model_key: str = DEFAULT_MODEL) -> dict:
         "families": classes.summarise(dict(zip(counts["label"], counts["count"]))),
         "frame": out,
         "evaluation": None,
+        "has_label_column": False,
+        "label_unusable": None,
         "mapping": mapping,
     }
 
-    if "Label" in df.columns:
+    # Three distinct outcomes, and the UI needs to tell them apart: scored, no
+    # ground truth offered, or ground truth offered that could not be read. The
+    # third used to be reported as the second, which told the user their Label
+    # column was absent when it was sitting right there.
+    result["has_label_column"] = "Label" in df.columns
+    if result["has_label_column"]:
         result["evaluation"] = _evaluate(df["Label"], predicted)
+        if result["evaluation"] is None:
+            unusable = sorted({str(v) for v in df["Label"].unique()})[:5]
+            result["label_unusable"] = unusable
 
     return result
+
+
+def _normalise_label(value) -> str:
+    """Case- and separator-insensitive form of a class name, for matching only."""
+    return re.sub(r"[^a-z0-9]", "", str(value).strip().lower())
 
 
 def _evaluate(truth: pd.Series, predicted: np.ndarray) -> dict | None:
@@ -392,6 +408,13 @@ def _evaluate(truth: pd.Series, predicted: np.ndarray) -> dict | None:
     if pd.api.types.is_numeric_dtype(truth):
         truth = truth.map(LABELS)
     truth = truth.astype(str)
+
+    # A spreadsheet round-trip leaves "FTP-BruteForce " or "ftp-bruteforce"
+    # rather than the exact class name. Those used to match nothing, so the file
+    # was silently scored as if it had no ground truth at all. Match on a
+    # normalised form and map back to the canonical spelling.
+    canonical = {_normalise_label(v): v for v in LABELS.values()}
+    truth = truth.map(lambda v: canonical.get(_normalise_label(v), v))
 
     if truth.isna().all() or not set(truth) & set(LABELS.values()):
         return None
