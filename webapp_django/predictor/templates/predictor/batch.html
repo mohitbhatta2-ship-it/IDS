@@ -75,7 +75,7 @@
           Names do not have to match exactly — CIC-IDS2017 spellings such as
           <code>Destination Port</code> or <code>Total Length of Fwd Packets</code> are recognised
           and mapped automatically, as are headers with stray leading spaces. Extra columns are
-          kept and returned untouched in the download.
+          ignored rather than rejected.
         </p>
         <div class="columns-list">
           {% for f in features %}<code>{{ f }}</code>{% endfor %}
