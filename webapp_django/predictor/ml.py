@@ -156,9 +156,11 @@ MODEL_REGISTRY: dict[str, dict] = {
 
 DEFAULT_MODEL = "histgradientboosting"
 
-# Below this many matched features the remainder would be invented from medians,
-# and the prediction would say more about the fill values than the data.
-MIN_MATCHED_FEATURES = 20
+# All 30 features are required. Substituting a median for an absent column was
+# tried and removed: dropping `Fwd Seg Size Min` alone took accuracy on a
+# Slowloris file from 0.996 to 0.034 while the page still showed confident
+# predictions, because the fill is a single constant that ignores the uploaded
+# data entirely. A refusal naming the missing columns is the honest answer.
 
 _cache: dict[str, object] = {}
 _lock = threading.Lock()
@@ -304,17 +306,14 @@ def predict_batch(df: pd.DataFrame, model_key: str = DEFAULT_MODEL) -> dict:
             f"dataset? Columns found: {', '.join(map(str, df.columns[:8]))}…"
         )
 
-    if mapping["matched"] < MIN_MATCHED_FEATURES:
-        raise BatchError(
-            f"Only {mapping['matched']} of the {len(FEATURES)} required features "
-            f"could be matched, which is too few to classify meaningfully "
-            f"(at least {MIN_MATCHED_FEATURES} are needed). "
-            f"Missing: {', '.join(mapping['missing'][:6])}"
-            + ("…" if len(mapping["missing"]) > 6 else "")
-        )
-
     if mapping["missing"]:
-        df = column_mapping.fill_missing(df, FEATURES, FEATURE_STATS)
+        n = len(mapping["missing"])
+        raise BatchError(
+            f"{n} of the {len(FEATURES)} required feature columns "
+            f"{'is' if n == 1 else 'are'} missing from this file, so it cannot "
+            f"be classified. Add {'it' if n == 1 else 'them'} and upload again. "
+            f"Missing: {', '.join(mapping['missing'])}"
+        )
 
     model, scaler = _load(model_key)
 

@@ -70,17 +70,31 @@ class PredictBatchTests(TestCase):
             ml.predict_batch(df)
         self.assertIn("None of the 30", str(ctx.exception))
 
-    def test_rejects_when_too_few_features_match(self):
-        df = self._rows(ml.FEATURES[:10])
+    def test_rejects_a_partial_dataset_and_names_every_missing_column(self):
+        df = self._rows(ml.FEATURES[:25])
         with self.assertRaises(ml.BatchError) as ctx:
             ml.predict_batch(df)
-        self.assertIn("too few", str(ctx.exception))
 
-    def test_accepts_a_partial_dataset_and_flags_what_was_filled(self):
-        df = self._rows(ml.FEATURES[:25])
-        result = ml.predict_batch(df)
+        message = str(ctx.exception)
+        self.assertIn("5 of the 30", message)
+        for absent in ml.FEATURES[25:]:
+            self.assertIn(absent, message, "the message must name every missing column")
+
+    def test_rejects_a_dataset_missing_a_single_column(self):
+        """One absent feature is enough. It used to be filled with a median."""
+        df = self._rows([f for f in ml.FEATURES if f != "Fwd Seg Size Min"])
+        with self.assertRaises(ml.BatchError) as ctx:
+            ml.predict_batch(df)
+
+        message = str(ctx.exception)
+        self.assertIn("1 of the 30", message)
+        self.assertIn("Fwd Seg Size Min", message)
+        self.assertIn("is missing", message, "singular wording for one column")
+
+    def test_a_complete_dataset_is_still_accepted(self):
+        result = ml.predict_batch(self._rows(ml.FEATURES))
         self.assertEqual(result["rows"], 5)
-        self.assertEqual(len(result["mapping"]["missing"]), 5)
+        self.assertEqual(result["mapping"]["missing"], [])
 
     def test_foreign_naming_gives_the_same_answer_as_native(self):
         native = self._rows(ml.FEATURES)

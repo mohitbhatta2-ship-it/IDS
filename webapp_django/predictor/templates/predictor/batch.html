@@ -6,8 +6,10 @@
   <h1>Classify a whole dataset</h1>
   <p>
     Upload a CSV or Parquet file containing the 30 feature columns and every row is classified
-    at once. If the file also has a <code>Label</code> column it is treated as ground truth, so
-    you get real accuracy, macro F1 and a per-class breakdown rather than just predictions.
+    at once. All 30 are required — if any is absent the file is rejected and the missing names
+    are listed, rather than guessed at. If the file also has a <code>Label</code> column it is
+    treated as ground truth, so you get real accuracy, macro F1 and a per-class breakdown
+    rather than just predictions.
   </p>
 </div>
 

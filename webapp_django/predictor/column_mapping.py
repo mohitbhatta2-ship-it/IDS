@@ -148,19 +148,3 @@ def map_columns(df: pd.DataFrame, features: list[str]) -> tuple[pd.DataFrame, di
     }
 
     return out, report
-
-
-def fill_missing(df: pd.DataFrame, features: list[str], stats: dict) -> pd.DataFrame:
-    """
-    Add any still-missing feature columns, filled with the training median.
-
-    The median is a far better stand-in than zero: zero is an extreme value for
-    most of these features and pushes rows into regions of the feature space the
-    model never saw. It is still a guess, which is why the UI reports exactly
-    which columns were invented.
-    """
-    out = df.copy()
-    for f in features:
-        if f not in out.columns:
-            out[f] = stats.get(f, {}).get("median", 0.0)
-    return out
