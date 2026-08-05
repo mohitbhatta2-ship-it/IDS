@@ -124,6 +124,10 @@ def api_predict(request):
         predicted_label=result["label"],
         confidence=result["confidence"],
         features=values,
+        # A manual entry is exactly one flow. Recording it means the Rows column
+        # shows 1 rather than a dash that looks like missing data.
+        row_count=1,
+        attack_count=1 if result["is_attack"] else 0,
     )
 
     return JsonResponse(result)
