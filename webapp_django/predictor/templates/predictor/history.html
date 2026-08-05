@@ -50,9 +50,18 @@
                     <span style="color: var(--ink-muted); font-size: .76rem;">· {{ log.attack_count }} attacks</span>
                   {% endif %}
                 </td>
-                <td class="num">{% if log.row_count %}{{ log.row_count }}{% else %}—{% endif %}</td>
-                <td class="num">{% if log.accuracy %}{{ log.accuracy|floatformat:4 }}{% else %}—{% endif %}</td>
-                <td class="num">{% if log.macro_f1 %}{{ log.macro_f1|floatformat:4 }}{% else %}—{% endif %}</td>
+                <td class="num">
+                  {% if log.row_count %}{{ log.row_count }}
+                  {% else %}<span class="na" title="{{ log.blank_reason }}">—</span>{% endif %}
+                </td>
+                <td class="num">
+                  {% if log.was_evaluated %}{{ log.accuracy|floatformat:4 }}
+                  {% else %}<span class="na" title="{{ log.blank_reason }}">—</span>{% endif %}
+                </td>
+                <td class="num">
+                  {% if log.was_evaluated %}{{ log.macro_f1|floatformat:4 }}
+                  {% else %}<span class="na" title="{{ log.blank_reason }}">—</span>{% endif %}
+                </td>
               </tr>
             {% endfor %}
           </tbody>
