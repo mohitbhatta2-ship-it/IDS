@@ -204,20 +204,23 @@ pointers, rather than allowing a runtime failure that is harder to diagnose.
 
 ---
 
-## 3. Outstanding defects — identified, not yet fixed
+## 3. Defects found during review
 
-These were found during review of the existing code and remain present on `main`.
+These were found during review of the existing code. **The `Live/` entries were
+subsequently fixed in commit `c762129`** ("Fix the live traffic module so it can
+actually run"), which is on `main`; they are kept here as the record of what was
+wrong. Anything still outstanding is marked as such.
 
-| Location | Problem |
-|---|---|
-| `app.py` | A 45-line Flask stub calling `render_template` for five templates that do not exist, so every route fails. The commit that added `Live/` replaced 923 lines of a working Streamlit dashboard (recoverable at `git show e47249b:app.py`). `requirements.txt` and `.devcontainer/devcontainer.json` still specify Streamlit, and Flask is not listed as a dependency. |
-| `Live/live_predictor.py`, `Live/preprocess_live.py` | Hardcoded Windows paths (`M:\IDS\...`) that exist only on one team member's machine. |
-| `Live/live_predictor.py` | Loads `RandomForest_Tuned.pkl`, which is excluded by `.gitignore` and absent from the repository, so the module fails at import. RandomForest is also the weakest of the four models. |
-| `Live/flow_manager.py:34` | `prediction, confidence = predict(processed)` unpacks a three-element list into two names, raising `ValueError` on the first expired flow. |
-| `Live/flow.py`, `Live/feature_extractor.py` | `start_time` is taken from the wall clock while `last_seen` comes from packet timestamps. The difference is negligible during live capture but makes flow duration and every inter-arrival feature meaningless when replaying a stored capture. |
-| `Live/sniff_test.py:23` | `cleanup_flows()` is called for every packet and iterates the entire flow table each time. |
-| `Live/validate_live_features.py:3` | Reads `train_selected.csv`, which does not exist — the repository stores Parquet. |
-| Repository | `webapp_data/` largely duplicates `c_filesnew/`. (The missing README and tests noted here have since been added: `README.md`, and 17 tests in `webapp_django/predictor/tests.py`.) |
+| Location | Problem | Status |
+|---|---|---|
+| `app.py` | A 45-line Flask stub calling `render_template` for five templates that do not exist, so every route fails. The commit that added `Live/` replaced 923 lines of a working Streamlit dashboard (recoverable at `git show e47249b:app.py`). `requirements.txt` and `.devcontainer/devcontainer.json` still specify Streamlit, and Flask is not listed as a dependency. | **Open** |
+| `Live/live_predictor.py`, `Live/preprocess_live.py` | Hardcoded Windows paths (`M:\IDS\...`) that exist only on one team member's machine. | Fixed — paths resolve through `Live/config.py` |
+| `Live/live_predictor.py` | Loads `RandomForest_Tuned.pkl`, which is excluded by `.gitignore` and absent from the repository, so the module fails at import. RandomForest is also the weakest of the four models. | Fixed — defaults to HistGradientBoosting |
+| `Live/flow_manager.py:34` | `prediction, confidence = predict(processed)` unpacks a three-element list into two names, raising `ValueError` on the first expired flow. | Fixed |
+| `Live/flow.py`, `Live/feature_extractor.py` | `start_time` is taken from the wall clock while `last_seen` comes from packet timestamps. The difference is negligible during live capture but makes flow duration and every inter-arrival feature meaningless when replaying a stored capture. | Fixed — timestamps come from the first packet |
+| `Live/sniff_test.py:23` | `cleanup_flows()` is called for every packet and iterates the entire flow table each time. | Fixed — sweeps every `CLEANUP_INTERVAL` |
+| `Live/validate_live_features.py:3` | Reads `train_selected.csv`, which does not exist — the repository stores Parquet. | Fixed — now a real parity report |
+| Repository | `webapp_data/` largely duplicates `c_filesnew/`. (The missing README and tests noted here have since been added: `README.md`, and 17 tests in `webapp_django/predictor/tests.py`.) | **Open** (duplication) |
 
 ### Feature parity — the largest open risk
 
@@ -227,13 +230,19 @@ any definition differs, the model receives out-of-distribution input and its
 predictions are meaningless even when the code runs without error. Specific
 points to verify before trusting any live result:
 
-- `Fwd Header Len` is computed as `ip.ihl * 4`, the IP header length, whereas
-  CICFlowMeter measures the transport header.
+- ~~`Fwd Header Len` is computed as `ip.ihl * 4`, the IP header length, whereas
+  CICFlowMeter measures the transport header.~~ Fixed in `c762129` — now uses the
+  TCP data offset, or 8 for UDP.
 - `Fwd Seg Size Min` is derived from TCP payload lengths here; CICFlowMeter's is
-  a header measure.
-- `FLOW_TIMEOUT` is 30 seconds against CICFlowMeter's default of 120, which
-  changes flow boundaries and therefore duration and all inter-arrival statistics.
+  a header measure. **Still open.**
+- ~~`FLOW_TIMEOUT` is 30 seconds against CICFlowMeter's default of 120, which
+  changes flow boundaries and therefore duration and all inter-arrival statistics.~~
+  Fixed in `c762129` — now 120 s.
 - `Init Fwd Win Byts` defaults to 0 here; the training data uses −1 when absent.
+  **Still open.**
 
-`Live/validate_live_features.py` was an attempt at exactly this check and should
-be repaired into a proper parity report.
+`Live/validate_live_features.py` was an attempt at exactly this check and has
+since been rebuilt into a real parity report: it reads the Parquet training set,
+compares ranges per feature, and flags any feature with a large share of live
+values falling outside the training range. Two definition gaps remain above, so
+live results are still not fully validated.

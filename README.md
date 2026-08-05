@@ -170,16 +170,33 @@ Training data: `webapp_data/Processed_Data/balanced_train_selected.parquet`
 Packet capture with Scapy, flow assembly, and a hand-written reimplementation of
 the 30 CICFlowMeter features so live traffic can be scored with the same models.
 
-**This module does not currently run.** It has hardcoded Windows paths, loads a
-model that isn't in the repository, and has a tuple-unpacking bug that raises on
-the first expired flow. `CHANGES.md` §3 lists each defect with its file and line.
+The module runs. An earlier round of defects — Windows-only paths, a missing
+model file, a tuple-unpacking crash on the first expired flow, wall-clock vs.
+packet timestamps — was fixed in `c762129`, which also added 15 regression tests
+and an end-to-end run over a synthetic 265-packet capture (53 flows classified).
 
-The deeper risk is feature parity: the models were trained on CICFlowMeter
-output, and if any of the 30 reimplemented definitions differs, the model gets
-out-of-distribution input and its predictions are meaningless *even when the code
-runs cleanly*. Four specific discrepancies are already known (`Fwd Header Len`,
-`Fwd Seg Size Min`, `FLOW_TIMEOUT`, `Init Fwd Win Byts`) and are documented in
-`CHANGES.md`. Treat any live result as unvalidated until a parity report exists.
+```bash
+python Live/sniff_test.py --iface <name> --count 500    # live capture
+python Live/sniff_test.py --pcap capture.pcap           # or replay a file
+python Live/list_interfaces.py                          # find an interface name
+python Live/validate_live_features.py                   # feature-parity report
+```
+
+**The open risk is feature parity, not crashes.** The models were trained on
+CICFlowMeter output, and `feature_calculator.py` is a hand-written
+reimplementation of 30 of those features. If a definition differs, the model gets
+out-of-distribution input and its predictions are meaningless *even though the
+code runs cleanly*. Two known discrepancies remain:
+
+| Feature | Here | CICFlowMeter |
+|---|---|---|
+| `Fwd Seg Size Min` | derived from TCP payload lengths | a header measure |
+| `Init Fwd Win Byts` | defaults to `0` when absent | training data uses `-1` |
+
+Two others were closed by `c762129`: `FLOW_TIMEOUT` now matches CICFlowMeter's
+120 s, and `Fwd Header Len` now measures the transport header rather than the IP
+header. Run `validate_live_features.py` for a per-feature comparison against the
+training ranges before trusting a live result.
 
 ---
 
@@ -193,8 +210,15 @@ They cover the column-mapping layer — alias resolution, leading spaces, reject
 unrecognisable files, and confirming that a CIC-IDS2017-named file gives the same
 answer as a natively-named one.
 
-`Live/test_live_pipeline.py` and `Live/test_prediction.py` exist but depend on the
-unfixed module above.
+The live capture module has its own suite:
+
+```bash
+python -m pytest Live/test_live_pipeline.py    # 15 tests
+```
+
+`Live/test_prediction.py` is a command-line smoke script rather than a pytest
+test — it takes a CSV path as an argument, so `pytest Live/` fails to collect it.
+Run it directly: `python Live/test_prediction.py <captured.csv>`.
 
 ---
 
@@ -229,7 +253,7 @@ Two things to know about the free tier:
 - `app.py` at the repo root is a broken 45-line Flask stub referencing five
   templates that don't exist. It is not the web app; `webapp_django/` is.
 - `webapp_data/` and `c_filesnew/` largely duplicate each other.
-- The `Live/` module is not usable as-is (above).
+- Live capture has two unresolved feature-parity gaps (above).
 - No `LICENSE` file yet. The CSE-CIC-IDS2018 dataset has its own terms — see the
   [dataset page](https://www.unb.ca/cic/datasets/ids-2018.html) before
   redistributing any data derived from it.
@@ -237,6 +261,33 @@ Two things to know about the free tier:
 `CHANGES.md` is the authoritative list, with file and line references.
 
 ---
+
+## AI assistance
+
+Part of this repository was written with [Claude Code](https://claude.com/claude-code)
+as a coding assistant. Commits produced that way carry a `Co-Authored-By: Claude`
+trailer, so the record is in the git history rather than in this paragraph —
+**12 of 40 commits** at the time of writing, all of them from August 2026.
+
+What that did and did not cover:
+
+| | |
+|---|---|
+| **Carries the trailer** | The Django web app, the dataset column-mapping layer, the `Live/` module repair, the sample-data generators, and this README |
+| **Does not** | The notebooks — EDA, feature selection, Optuna tuning, CTGAN augmentation and the scaling experiment — and the original `Live/` capture pipeline |
+
+That split is what the git history records, which is a statement about these
+commits rather than a claim about every keystroke behind them.
+
+The work was directed, reviewed and merged by the authors. Every change landed
+through a pull request describing what it changed and how it was verified; the
+model results in this README come from the notebooks' own output tables
+(`webapp_data/Results/Tables/`), not from anything a language model produced. The
+test suites exist partly to make that checkable rather than something you have to
+take on trust.
+
+Stated here because using the tool is unremarkable, but being vague about where
+it was used would not be.
 
 ## Dataset
 
