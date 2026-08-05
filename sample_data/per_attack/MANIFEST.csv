@@ -1,0 +1,16 @@
+file,class,rows,from_test,from_train,test_pool,kb,kb_no_labels
+benign.csv,Benign,500,500,0,170202,101.8,98.3
+bot.csv,Bot,500,500,0,3573,79.3,77.3
+brute_force_web.csv,Brute Force -Web,500,122,378,122,201.0,192.6
+brute_force_xss.csv,Brute Force -XSS,500,46,454,46,218.8,210.5
+ddos_attack_hoic.csv,DDOS attack-HOIC,500,500,0,8461,81.9,73.6
+ddos_attack_loic_udp.csv,DDOS attack-LOIC-UDP,500,346,154,346,128.6,118.4
+ddos_attacks_loic_http.csv,DDoS attacks-LOIC-HTTP,500,500,0,7293,99.4,88.1
+dos_attacks_goldeneye.csv,DoS attacks-GoldenEye,500,500,0,525,107.5,96.7
+dos_attacks_hulk.csv,DoS attacks-Hulk,500,500,0,5505,75.8,67.5
+dos_attacks_slowhttptest.csv,DoS attacks-SlowHTTPTest,500,246,254,246,97.4,85.2
+dos_attacks_slowloris.csv,DoS attacks-Slowloris,500,130,370,130,201.0,190.3
+ftp_bruteforce.csv,FTP-BruteForce,500,498,2,498,79.8,72.5
+infilteration.csv,Infilteration,500,500,0,2049,85.3,78.4
+sql_injection.csv,SQL Injection,87,17,70,17,20.2,19.0
+ssh_bruteforce.csv,SSH-Bruteforce,500,500,0,1485,124.3,117.0
