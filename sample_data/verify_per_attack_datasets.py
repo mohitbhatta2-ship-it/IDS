@@ -107,7 +107,7 @@ def _check_no_labels_match(files: list[Path], model_key: str) -> int:
     """Count files whose unlabelled copy yields byte-identical predictions."""
     same = 0
     for path in files:
-        twin = OUT / "no_labels" / path.name
+        twin = OUT / "no_labels" / f"{path.stem}_no_labels.csv"
         if not twin.is_file():
             continue
         a = ml.predict_batch(pd.read_csv(path), model_key)["frame"]
