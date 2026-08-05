@@ -313,6 +313,11 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 /* ---------- Upload ---------- */
 
 .dropzone {
+  /* The dropzone is a <label>, which is inline by default. With block-level
+     children inside it the border fragments around the line boxes instead of
+     drawing one box, which is why it rendered as a stray dashed shape beside
+     the text. */
+  display: block;
   border: 1.5px dashed var(--line-strong); border-radius: var(--radius);
   padding: 2.4rem 1.5rem; text-align: center;
   background: var(--surface-sunk); cursor: pointer;
@@ -1156,3 +1161,17 @@ a.lp-use:hover .lp-use-go { text-decoration: underline; text-underline-offset: 3
   .nav::-webkit-scrollbar { display: none; }
   .nav a { white-space: nowrap; }
 }
+
+/* ---------- Dropzone: file-selected state ----------
+   The border already turns solid blue; the headline becoming the filename is
+   what actually tells you the file registered, so give it the accent too and
+   swap the upload arrow for a tick. */
+
+.dropzone.has-file { border-color: var(--series-1); }
+.dropzone.has-file .primary {
+  color: var(--series-1);
+  word-break: break-all;
+}
+.dropzone.has-file .icon-upload { display: none; }
+.dropzone .icon-check { display: none; }
+.dropzone.has-file .icon-check { display: inline; color: var(--good); }
