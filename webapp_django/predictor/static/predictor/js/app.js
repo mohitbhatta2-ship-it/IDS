@@ -32,6 +32,33 @@
     return node;
   }
 
+  // requestAnimationFrame never fires while a tab is in the background, so a
+  // page opened in a background tab would keep its bars at 0% and its ring
+  // empty. Fall back to a timer when the document is hidden.
+  function nextFrame(fn) {
+    if (document.visibilityState === "hidden") { setTimeout(fn, 0); return; }
+    requestAnimationFrame(fn);
+  }
+
+  function countUp(node, target, duration) {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
+        document.visibilityState === "hidden") {
+      node.textContent = target.toFixed(1);
+      return;
+    }
+    const start = performance.now();
+    (function step(now) {
+      const t = Math.min((now - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - t, 3);
+      node.textContent = (target * eased).toFixed(1);
+      if (t < 1) requestAnimationFrame(step);
+    })(start);
+  }
+
+  function markFilled(input) {
+    input.closest(".field").classList.toggle("filled", input.value.trim() !== "");
+  }
+
   function cookie(name) {
     var match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
     return match ? decodeURIComponent(match[2]) : "";
@@ -56,8 +83,14 @@
       var v = getter(input);
       input.value = v === null || v === undefined ? "" : v;
       input.closest(".field").classList.remove("has-error");
+      markFilled(input);
     });
   }
+
+  inputs().forEach(function (i) {
+    markFilled(i);
+    i.addEventListener("input", function () { markFilled(i); });
+  });
 
   var presetSelect = document.getElementById("preset");
   if (presetSelect) {
@@ -113,50 +146,116 @@
     }
   }
 
+  function ring(fraction, family) {
+    // Confidence as a stroke-dashoffset arc. Built with createElementNS because
+    // innerHTML does not work for SVG children.
+    const NS = "http://www.w3.org/2000/svg";
+    const R = 44, C = 2 * Math.PI * R;
+
+    const wrap = el("div", "ring " + family);
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("viewBox", "0 0 104 104");
+    svg.setAttribute("width", "116");
+    svg.setAttribute("height", "116");
+
+    // Gradient along the arc, from a translucent form of the family colour to
+    // the solid one, so the ring reads as filling rather than as a flat band.
+    const defs = document.createElementNS(NS, "defs");
+    const grad = document.createElementNS(NS, "linearGradient");
+    grad.setAttribute("id", "ringGrad");
+    grad.setAttribute("x1", "0"); grad.setAttribute("y1", "0");
+    grad.setAttribute("x2", "1"); grad.setAttribute("y2", "1");
+    [["0%", ".45"], ["55%", ".85"], ["100%", "1"]].forEach(function (p) {
+      const stop = document.createElementNS(NS, "stop");
+      stop.setAttribute("offset", p[0]);
+      stop.setAttribute("stop-color", "currentColor");
+      stop.setAttribute("stop-opacity", p[1]);
+      grad.appendChild(stop);
+    });
+    defs.appendChild(grad);
+    svg.appendChild(defs);
+
+    ["track", "value"].forEach(function (role) {
+      const c = document.createElementNS(NS, "circle");
+      c.setAttribute("cx", "52"); c.setAttribute("cy", "52"); c.setAttribute("r", String(R));
+      c.setAttribute("fill", "none"); c.setAttribute("stroke-width", "9");
+      c.setAttribute("class", role);
+      if (role === "value") {
+        c.setAttribute("stroke-dasharray", String(C));
+        c.setAttribute("stroke-dashoffset", String(C));
+        nextFrame(function () {
+          c.setAttribute("stroke-dashoffset", String(C * (1 - Math.max(fraction, 0.005))));
+        });
+      }
+      svg.appendChild(c);
+    });
+
+    wrap.appendChild(svg);
+
+    const label = el("div", "ring-label");
+    const n = el("div", "n", "0.0");
+    label.appendChild(n);
+    label.appendChild(el("div", "u", "percent"));
+    wrap.appendChild(label);
+
+    countUp(n, fraction * 100, 850);
+    return wrap;
+  }
+
   function renderResult(data) {
     verdict.replaceChildren();
+    const fam = "fam-" + data.family;
 
-    // Verdict banner — colour is always paired with an icon and the class name,
-    // never carrying the meaning on its own.
-    var banner = el("div", "verdict-banner " + (data.is_attack ? "is-attack" : "is-benign"));
-    banner.appendChild(el("span", "dot"));
+    // Hero: family colour as a wash and a left rule, class name in text, family
+    // named on the chip. Colour never carries the meaning by itself.
+    const hero = el("div", "verdict-hero " + fam);
+    const top = el("div", "verdict-hero-top");
+    const chip = el("span", "fam-chip");
+    chip.appendChild(el("span", "swatch"));
+    chip.appendChild(el("span", null, data.family_name));
+    top.appendChild(chip);
+    hero.appendChild(top);
+    hero.appendChild(el("div", "verdict-class", data.label));
+    hero.appendChild(el("div", "verdict-sub",
+      data.is_attack ? "Attack traffic detected" : "Normal traffic — nothing to action"));
+    verdict.appendChild(hero);
 
-    var textWrap = el("div");
-    textWrap.appendChild(el("div", "label", data.label));
-    textWrap.appendChild(el("div", "sub", data.is_attack ? "Attack traffic" : "Normal traffic"));
-    banner.appendChild(textWrap);
-    verdict.appendChild(banner);
+    const rw = el("div", "ring-wrap");
+    rw.appendChild(ring(data.confidence, fam));
+    const note = el("div", "ring-note");
+    const strong = el("strong", null, "Confidence");
+    note.appendChild(strong);
+    note.appendChild(el("div", null, "how sure the model is about this class"));
+    note.appendChild(el("div", "field-hint", data.model));
+    rw.appendChild(note);
+    verdict.appendChild(rw);
 
-    var conf = el("div");
-    conf.appendChild(el("div", "field-label", "Confidence"));
-    conf.appendChild(el("div", "confidence-value", percent(data.confidence)));
-    conf.appendChild(el("div", "field-hint", "predicted by " + data.model));
-    verdict.appendChild(conf);
+    const bars = el("div", "bars");
+    data.top.forEach(function (row) {
+      const rowFam = "fam-" + row.family;
+      const barRow = el("div", "bar-row " + rowFam);
 
-    // Top-3 probabilities as a single-series bar chart with direct labels.
-    var bars = el("div", "bars");
-    data.top.forEach(function (row, i) {
-      var isBenign = row.label === "Benign";
-      var barRow = el("div", "bar-row " + (i === 0 ? (isBenign ? "is-benign" : "is-attack") : ""));
-
-      var meta = el("div", "bar-meta");
-      meta.appendChild(el("span", "name", row.label));
+      const meta = el("div", "bar-meta");
+      const name = el("span", "name");
+      name.appendChild(el("span", "bar-dot"));
+      name.appendChild(el("span", null, row.label));
+      meta.appendChild(name);
       meta.appendChild(el("span", "value", percent(row.confidence)));
       barRow.appendChild(meta);
 
-      var track = el("div", "bar-track");
-      var fill = el("div", "bar-fill");
+      const track = el("div", "bar-track");
+      const fill = el("div", "bar-fill by-family");
       fill.style.width = "0%";
       track.appendChild(fill);
       barRow.appendChild(track);
       bars.appendChild(barRow);
 
-      requestAnimationFrame(function () {
+      nextFrame(function () {
         fill.style.width = Math.max(row.confidence * 100, 0.6) + "%";
       });
     });
 
-    var barsWrap = el("div");
+    const barsWrap = el("div");
     barsWrap.appendChild(el("div", "field-label", "Most likely classes"));
     barsWrap.appendChild(bars);
     verdict.appendChild(barsWrap);

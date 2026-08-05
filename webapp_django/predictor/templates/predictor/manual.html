@@ -81,5 +81,25 @@
   </aside>
 </form>
 
+<div class="card" style="margin-bottom: 3rem;">
+  <div class="card-head">
+    <h2>Attack families</h2>
+    <p>colour groups the 15 classes into six families</p>
+  </div>
+  <div class="card-body">
+    <div class="family-grid">
+      {% for fam in families %}
+        <div class="family-card fam-{{ fam.key }}">
+          <h4><span class="swatch"></span>{{ fam.name }}</h4>
+          <p>{{ fam.blurb }}</p>
+          <div class="members">
+            {% for m in fam.members %}<code>{{ m }}</code>{% endfor %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
 {{ presets|json_script:"presets-data" }}
 {% endblock %}

@@ -33,3 +33,6 @@ webapp_django/staticfiles/
 Live/live_flows.csv
 live_flows.csv
 **/Results/Tables/live_feature_parity.csv
+
+# Large generated samples (regenerate from webapp_data/Processed_Data)
+sample_data/*20k*.csv

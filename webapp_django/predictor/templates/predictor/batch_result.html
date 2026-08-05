@@ -48,6 +48,57 @@
     {% endif %}
   </div>
 
+  {% if result.mapping.aliased or result.mapping.missing or result.mapping.label_renamed_from %}
+    <div class="card">
+      <div class="card-head">
+        <h2>Column mapping</h2>
+        <p>{{ result.mapping.matched }} of {{ result.mapping.total_required }} features matched</p>
+      </div>
+      <div class="card-body">
+        <p style="font-size: .85rem; color: var(--ink-2); margin-bottom: .9rem;">
+          This file did not use our column names exactly, so its columns were mapped onto the
+          features the models were trained on.
+        </p>
+
+        {% if result.mapping.aliased %}
+          <div class="field-label" style="margin-bottom: .5rem;">Renamed</div>
+          <div class="table-scroll" style="margin-bottom: 1.1rem;">
+            <table>
+              <thead><tr><th>Column in your file</th><th>Mapped to</th></tr></thead>
+              <tbody>
+                {% for original, canonical in result.mapping.aliased %}
+                  <tr><td>{{ original }}</td><td>{{ canonical }}</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% endif %}
+
+        {% if result.mapping.label_renamed_from %}
+          <div class="notice is-info" style="margin-bottom: 1.1rem;">
+            <span>Ground truth was read from <code>{{ result.mapping.label_renamed_from }}</code>.</span>
+          </div>
+        {% endif %}
+
+        {% if result.mapping.missing %}
+          <div class="notice is-error">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/>
+            </svg>
+            <span>
+              <strong>{{ result.mapping.missing|length }} feature(s) were not in this file</strong>
+              and were filled with the training median, so the predictions below are weaker
+              than they would be on a complete dataset. Treat them as indicative only.
+              <span class="columns-list" style="margin-top: .5rem;">
+                {% for f in result.mapping.missing %}<code>{{ f }}</code>{% endfor %}
+              </span>
+            </span>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
+
   {% if result.bad_rows %}
     <div class="notice is-info">
       <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
@@ -57,22 +108,46 @@
     </div>
   {% endif %}
 
+  <div class="card">
+    <div class="card-head">
+      <h2>Threat composition</h2>
+      <p>every row, grouped by attack family</p>
+    </div>
+    <div class="card-body">
+      <div class="composition">
+        {% for fam in result.families %}
+          <span class="fam-{{ fam.key }}" style="flex: {{ fam.count }} 1 0;"
+                title="{{ fam.name }} — {{ fam.count }} rows ({{ fam.share_pct|floatformat:1 }}%)"></span>
+        {% endfor %}
+      </div>
+      <div class="legend">
+        {% for fam in result.families %}
+          <span class="legend-item fam-{{ fam.key }}">
+            <span class="swatch"></span>
+            {{ fam.name }} <b>{{ fam.count }}</b>
+            <span style="color: var(--ink-muted);">{{ fam.share_pct|floatformat:1 }}%</span>
+          </span>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
   <div class="layout" style="padding-bottom: 0;">
     <div class="card">
       <div class="card-head">
         <h2>Predicted class distribution</h2>
-        <p>share of the {{ result.rows }} rows</p>
+        <p>share of the {{ result.rows }} rows · colour shows the attack family</p>
       </div>
       <div class="card-body">
         <div class="bars">
           {% for row in result.distribution %}
-            <div class="bar-row {% if row.is_attack %}is-attack{% else %}is-benign{% endif %}">
+            <div class="bar-row fam-{{ row.family }}">
               <div class="bar-meta">
-                <span class="name">{{ row.label }}</span>
+                <span class="name"><span class="bar-dot"></span>{{ row.label }}</span>
                 <span class="value">{{ row.count }} · {{ row.share_pct|floatformat:1 }}%</span>
               </div>
               <div class="bar-track">
-                <div class="bar-fill" style="width: {{ row.bar_width|floatformat:2 }}%;"></div>
+                <div class="bar-fill by-family" style="width: {{ row.bar_width|floatformat:2 }}%;"></div>
               </div>
             </div>
           {% endfor %}
@@ -124,7 +199,7 @@
               {% for row in evaluation.per_class %}
                 <tr>
                   <td>
-                    <span class="pill {% if row.label == 'Benign' %}is-benign{% else %}is-attack{% endif %}">
+                    <span class="pill fam-{{ row.family }}" style="color: var(--fam);">
                       <span class="dot"></span>{{ row.label }}
                     </span>
                   </td>
