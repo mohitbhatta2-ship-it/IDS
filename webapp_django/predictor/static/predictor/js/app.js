@@ -64,6 +64,57 @@
     return match ? decodeURIComponent(match[2]) : "";
   }
 
+  /* ------------------------------------------------------- dropzone */
+  // This runs before the manual-form section below, which returns early when
+  // #flow-form is absent. The dropzone lives on the batch page, where that
+  // element never exists -- so anything set up after that guard was dead code
+  // there, and the upload silently kept saying "Drop a dataset here".
+
+  var dropzone = document.querySelector("[data-dropzone]");
+  if (dropzone) {
+    var fileInput = dropzone.querySelector('input[type="file"]');
+    var nameLabel = dropzone.querySelector("[data-filename]");
+    var headline = dropzone.querySelector("[data-primary]");
+
+    var showFile = function (file) {
+      if (!file) return;
+      dropzone.classList.add("has-file");
+      // The headline has to change too. Leaving it on "Drop a dataset here"
+      // while only the small grey line updates reads as though the file was
+      // never picked up, which is exactly how it was reported.
+      if (headline) headline.textContent = file.name;
+      if (nameLabel) {
+        nameLabel.textContent =
+          (file.size / 1048576).toFixed(2) + " MB · click to choose a different file";
+      }
+    };
+
+    // No click handler here on purpose. The dropzone is a <label> wrapping the
+    // input, so the browser already opens the picker when it is clicked.
+    // Calling fileInput.click() as well made that click bubble back up to the
+    // label and re-enter the handler, asking for the file dialog repeatedly.
+    fileInput.addEventListener("change", function () { showFile(fileInput.files[0]); });
+
+    ["dragenter", "dragover"].forEach(function (evt) {
+      dropzone.addEventListener(evt, function (e) {
+        e.preventDefault();
+        dropzone.classList.add("is-over");
+      });
+    });
+    ["dragleave", "drop"].forEach(function (evt) {
+      dropzone.addEventListener(evt, function (e) {
+        e.preventDefault();
+        dropzone.classList.remove("is-over");
+      });
+    });
+    dropzone.addEventListener("drop", function (e) {
+      if (e.dataTransfer.files.length) {
+        fileInput.files = e.dataTransfer.files;
+        showFile(fileInput.files[0]);
+      }
+    });
+  }
+
   /* -------------------------------------------------- manual flow form */
 
   var form = document.getElementById("flow-form");
@@ -313,41 +364,4 @@
       .finally(function () { busy(false); });
   });
 
-  /* ------------------------------------------------------- dropzone */
-
-  var dropzone = document.querySelector("[data-dropzone]");
-  if (dropzone) {
-    var fileInput = dropzone.querySelector('input[type="file"]');
-    var nameLabel = dropzone.querySelector("[data-filename]");
-
-    function showFile(file) {
-      if (!file) return;
-      dropzone.classList.add("has-file");
-      if (nameLabel) {
-        nameLabel.textContent = file.name + " · " + (file.size / 1048576).toFixed(2) + " MB";
-      }
-    }
-
-    dropzone.addEventListener("click", function () { fileInput.click(); });
-    fileInput.addEventListener("change", function () { showFile(fileInput.files[0]); });
-
-    ["dragenter", "dragover"].forEach(function (evt) {
-      dropzone.addEventListener(evt, function (e) {
-        e.preventDefault();
-        dropzone.classList.add("is-over");
-      });
-    });
-    ["dragleave", "drop"].forEach(function (evt) {
-      dropzone.addEventListener(evt, function (e) {
-        e.preventDefault();
-        dropzone.classList.remove("is-over");
-      });
-    });
-    dropzone.addEventListener("drop", function (e) {
-      if (e.dataTransfer.files.length) {
-        fileInput.files = e.dataTransfer.files;
-        showFile(fileInput.files[0]);
-      }
-    });
-  }
 })();
