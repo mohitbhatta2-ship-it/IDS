@@ -49,7 +49,7 @@
     {% endif %}
   </div>
 
-  {% if result.mapping.aliased or result.mapping.missing or result.mapping.label_renamed_from %}
+  {% if result.mapping.aliased or result.mapping.label_renamed_from %}
     <div class="card">
       <div class="card-head">
         <h2>Column mapping</h2>
@@ -81,21 +81,6 @@
           </div>
         {% endif %}
 
-        {% if result.mapping.missing %}
-          <div class="notice is-error">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-              <circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/>
-            </svg>
-            <span>
-              <strong>{{ result.mapping.missing|length }} feature(s) were not in this file</strong>
-              and were filled with the training median, so the predictions below are weaker
-              than they would be on a complete dataset. Treat them as indicative only.
-              <span class="columns-list" style="margin-top: .5rem;">
-                {% for f in result.mapping.missing %}<code>{{ f }}</code>{% endfor %}
-              </span>
-            </span>
-          </div>
-        {% endif %}
       </div>
     </div>
   {% endif %}
