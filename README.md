@@ -92,8 +92,8 @@ evaluation run.
 **History** (`/history/`) — every run is appended to a log file
 (`webapp_django/logs/predictions.jsonl`, one JSON object per line) and read back
 here: headline totals, a filter by run type, and a row per run with its model,
-result and scores. **Download log** hands you the raw JSONL, so the same record
-can be charted or replayed outside the app.
+result and scores. **Download CSV** exports every run as a spreadsheet, so the
+same record can be charted outside the app.
 
 There's also a JSON endpoint at `POST /api/predict/` for a single flow.
 

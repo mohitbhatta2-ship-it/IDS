@@ -1,7 +1,9 @@
+import csv
 import json
 
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
+from django.utils.timezone import localtime
 from django.views.decorators.http import require_http_methods
 
 from . import classes, history_log, ml
@@ -235,11 +237,48 @@ def history(request):
     return render(request, "predictor/history.html", context)
 
 
+CSV_COLUMNS = [
+    "when", "type", "model", "predicted_class", "confidence",
+    "source_file", "rows", "attacks", "attack_share", "accuracy", "macro_f1",
+]
+
+
 def download_history(request):
-    """Serve the raw log, so a run can be replayed or charted outside the app."""
-    text = history_log.raw_text()
-    response = HttpResponse(text, content_type="application/x-ndjson")
-    response["Content-Disposition"] = 'attachment; filename="prediction-history.jsonl"'
+    """
+    Serve the whole log as CSV, so a run can be charted in Excel or read with
+    pandas without unpacking JSON first. The columns are the history table's,
+    flattened: a manual entry fills the prediction columns, an upload fills the
+    file ones, and a cell the run has no answer for is left empty rather than
+    guessed at. The 30 feature values a manual entry carries are left out --
+    they would swamp the sheet, and the raw log on the server still has them.
+
+    Oldest first, like the log itself, so the rows read as a timeline.
+    """
+    response = HttpResponse(content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = 'attachment; filename="prediction-history.csv"'
+
+    writer = csv.writer(response)
+    writer.writerow(CSV_COLUMNS)
+
+    for run in history_log.all_runs():
+        writer.writerow(
+            [
+                # Local time with its offset: unambiguous, and the same clock
+                # the History page shows rather than UTC.
+                localtime(run.at).isoformat(timespec="seconds") if run.at else "",
+                run.kind_display,
+                run.model_name,
+                run.predicted_label,
+                f"{run.confidence:.6f}" if run.confidence is not None else "",
+                run.source_filename,
+                run.row_count if run.row_count is not None else "",
+                run.attack_count if run.attack_count is not None else "",
+                f"{run.attack_share:.6f}" if run.row_count else "",
+                f"{run.accuracy:.6f}" if run.accuracy is not None else "",
+                f"{run.macro_f1:.6f}" if run.macro_f1 is not None else "",
+            ]
+        )
+
     return response
 
 

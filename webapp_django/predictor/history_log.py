@@ -261,15 +261,26 @@ def clear() -> None:
             pass
 
 
-def raw_text() -> str:
-    """The whole log, oldest first -- what the Download button serves."""
-    chunks = []
+def all_runs() -> list[Run]:
+    """
+    Every run on file, oldest first -- what the download serves. Unlike
+    recent(), this is not capped: an export that silently stopped at the page's
+    window would be worse than a slow one.
+    """
+    runs = []
     for path in _files():
         try:
-            chunks.append(path.read_text(encoding="utf-8", errors="replace"))
+            with path.open("r", encoding="utf-8", errors="replace") as handle:
+                for line in handle:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    run = _parse(line)
+                    if run is not None:
+                        runs.append(run)
         except OSError:
             continue
-    return "".join(chunks)
+    return runs
 
 
 # ---------------------------------------------------------------------------
