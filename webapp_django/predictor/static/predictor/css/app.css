@@ -1223,3 +1223,17 @@ a.lp-use:hover .lp-use-go { text-decoration: underline; text-underline-offset: 3
 @media (max-width: 640px) {
   .filter-note { margin-left: 0; width: 100%; }
 }
+
+/* ---------- Clearing history is a two-step ----------
+   The bar appears between the card head and the runs it is about to delete,
+   so what is at stake is on screen while the choice is made. */
+
+.confirm-bar {
+  display: flex; align-items: center; gap: .75rem; flex-wrap: wrap;
+  padding: .85rem 1.25rem; border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--critical) 8%, var(--surface));
+}
+.confirm-text { font-size: .82rem; color: var(--ink-2); flex: 1 1 22rem; min-width: 0; }
+.confirm-text strong { display: block; color: var(--ink); font-size: .9rem; margin-bottom: .1rem; }
+
+.btn-danger { background: var(--critical); color: #fff; border-color: var(--critical); }

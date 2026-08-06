@@ -320,3 +320,25 @@ class HistoryViewTests(TestCase):
         history_log.record(kind=history_log.MANUAL, model_name="MLP", predicted_label="Bot")
         self.client.post("/history/clear/")
         self.assertContains(self.client.get("/history/"), "Nothing yet")
+
+    def test_clearing_asks_for_confirmation_first(self):
+        history_log.record(kind=history_log.MANUAL, model_name="MLP", predicted_label="Bot")
+
+        response = self.client.get("/history/?confirm=clear")
+        self.assertContains(response, "Delete all 1 run?")
+        self.assertEqual(history_log.count(), 1, "asking must not delete anything")
+
+    def test_the_page_does_not_offer_the_confirmation_unasked(self):
+        history_log.record(kind=history_log.MANUAL, model_name="MLP", predicted_label="Bot")
+        self.assertNotContains(self.client.get("/history/"), "confirm-bar")
+
+    def test_the_confirmation_keeps_the_active_filter_on_cancel(self):
+        history_log.record(kind=history_log.MANUAL, model_name="MLP", predicted_label="Bot")
+        response = self.client.get("/history/?confirm=clear&kind=manual")
+        self.assertContains(response, 'href="/history/?kind=manual"')
+
+    def test_clearing_still_needs_a_post(self):
+        """The confirmation is a GET; only the POST behind it may delete."""
+        history_log.record(kind=history_log.MANUAL, model_name="MLP", predicted_label="Bot")
+        self.assertEqual(self.client.get("/history/clear/").status_code, 405)
+        self.assertEqual(history_log.count(), 1)

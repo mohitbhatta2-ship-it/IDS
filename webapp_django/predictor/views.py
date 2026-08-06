@@ -222,6 +222,9 @@ def history(request):
             # can say the totals cover recent runs rather than all of them.
             "truncated": total > len(window),
             "kind": kind,
+            # Clearing is a two-step: this renders the confirmation bar rather
+            # than letting one click delete the log.
+            "confirming": request.GET.get("confirm") == "clear",
             "counts": {
                 "manual": sum(1 for r in window if r.is_manual),
                 "batch": sum(1 for r in window if not r.is_manual),

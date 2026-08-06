@@ -20,13 +20,31 @@
     <div class="head-actions">
       {% if total %}
         <a class="btn btn-ghost btn-sm" href="{% url 'download_history' %}">Download log</a>
-        <form method="post" action="{% url 'clear_history' %}">
-          {% csrf_token %}
-          <button type="submit" class="btn btn-ghost btn-sm">Clear history</button>
-        </form>
+        {% if not confirming %}
+          <a class="btn btn-ghost btn-sm" href="{% url 'history' %}?confirm=clear{% if kind %}&amp;kind={{ kind }}{% endif %}">Clear history</a>
+        {% endif %}
       {% endif %}
     </div>
   </div>
+
+  {% if confirming and total %}
+    {% comment %}
+      Deleting the log cannot be undone, so the destructive click is a second
+      one, and it says how much is about to go.
+    {% endcomment %}
+    <div class="confirm-bar">
+      <div class="confirm-text">
+        <strong>Delete all {{ total }} run{{ total|pluralize }}?</strong>
+        This erases the log file on the server and cannot be undone —
+        <a href="{% url 'download_history' %}">download the log</a> first if you need the record.
+      </div>
+      <form method="post" action="{% url 'clear_history' %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger btn-sm">Yes, delete {{ total }} run{{ total|pluralize }}</button>
+      </form>
+      <a class="btn btn-ghost btn-sm" href="{% url 'history' %}{% if kind %}?kind={{ kind }}{% endif %}">Cancel</a>
+    </div>
+  {% endif %}
 
   {% if total %}
     <div class="card-body">
