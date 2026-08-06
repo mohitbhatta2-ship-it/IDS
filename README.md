@@ -89,8 +89,11 @@ a `Label` column it's treated as ground truth, and the page reports accuracy,
 macro F1 and a per-class precision/recall/F1 table — so an upload doubles as an
 evaluation run.
 
-**History** (`/history/`) — every run recorded through the Django ORM, with its
-model, result and scores.
+**History** (`/history/`) — every run is appended to a log file
+(`webapp_django/logs/predictions.jsonl`, one JSON object per line) and read back
+here: headline totals, a filter by run type, and a row per run with its model,
+result and scores. **Download log** hands you the raw JSONL, so the same record
+can be charted or replayed outside the app.
 
 There's also a JSON endpoint at `POST /api/predict/` for a single flow.
 
@@ -242,10 +245,10 @@ Two things to know about the free tier:
 
 - **It sleeps.** The first request after a nap takes 30–60 s, plus model
   unpickling on the first prediction.
-- **Prediction history does not survive a restart.** The default database is
-  SQLite on Render's ephemeral filesystem, so every deploy or spin-down empties
-  the History page. Mount a persistent disk or attach a managed database if that
-  matters — populate it shortly before any demo otherwise.
+- **Prediction history does not survive a restart.** The history log lives on
+  Render's ephemeral filesystem, so every deploy or spin-down empties the History
+  page. Mount a persistent disk and point `IDS_HISTORY_LOG` at it if that matters
+  — populate the log shortly before any demo otherwise.
 
 ---
 

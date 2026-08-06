@@ -44,6 +44,8 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
+    # "3 minutes ago" beside each run's timestamp on the history page.
+    'django.contrib.humanize',
     'django.contrib.staticfiles',
     'predictor',
 ]
@@ -155,6 +157,12 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # Where the trained models and Processed_Data/ live. Left as None, predictor.ml
 # walks up from this file looking for webapp_data/ or c_filesnew/.
 IDS_DATA_ROOT = os.environ.get("IDS_DATA_ROOT") or None
+
+# Prediction history is an append-only JSONL log (see predictor/history_log.py)
+# rather than a database table. Point IDS_HISTORY_LOG at a mounted disk to keep
+# history across deploys -- on an ephemeral filesystem the default path lasts
+# only as long as the container, the same as db.sqlite3 beside it.
+HISTORY_LOG_PATH = os.environ.get("IDS_HISTORY_LOG") or (BASE_DIR / "logs" / "predictions.jsonl")
 
 # Uploaded datasets are held in memory up to this size before spilling to a
 # temp file; batch scoring reads the whole frame anyway.

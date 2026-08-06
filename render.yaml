@@ -31,3 +31,15 @@ services:
 
       # ALLOWED_HOSTS and CSRF_TRUSTED_ORIGINS pick up RENDER_EXTERNAL_HOSTNAME
       # automatically (see ids_web/settings.py), so no hostname is hardcoded.
+
+      # Prediction history is appended to logs/predictions.jsonl, which the free
+      # plan's ephemeral filesystem wipes on every deploy. On a paid plan, add a
+      # persistent disk and point the log at it so history survives:
+      #
+      #   disks:
+      #     - name: history
+      #       mountPath: /var/data
+      #       sizeGB: 1
+      #
+      # - key: IDS_HISTORY_LOG
+      #   value: /var/data/predictions.jsonl

@@ -155,8 +155,12 @@ and a per-class precision/recall/F1 table — so an upload doubles as an evaluat
 run rather than merely a prediction run. Each row is annotated with
 `Predicted Class` and `Confidence`, shown in the preview table.
 
-**History.** Every run is recorded through the Django ORM and listed with its
-model, result and scores.
+**History.** Every run is appended to `logs/predictions.jsonl` — one JSON object
+per line — and the page reads that file back: headline totals across the runs, a
+filter by run type, and a row per run with its model, result and scores. The raw
+log is downloadable, so the same record can be charted outside the app. It began
+as a database table; a log file keeps the record readable and portable, and
+independent of the database.
 
 ### Models
 

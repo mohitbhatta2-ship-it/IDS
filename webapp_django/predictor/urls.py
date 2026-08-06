@@ -8,5 +8,6 @@ urlpatterns = [
     path("api/predict/", views.api_predict, name="api_predict"),
     path("batch/", views.batch, name="batch"),
     path("history/", views.history, name="history"),
+    path("history/download/", views.download_history, name="download_history"),
     path("history/clear/", views.clear_history, name="clear_history"),
 ]

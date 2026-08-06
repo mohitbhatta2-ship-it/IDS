@@ -1180,3 +1180,46 @@ a.lp-use:hover .lp-use-go { text-decoration: underline; text-underline-offset: 3
 .dropzone.has-file .icon-upload { display: none; }
 .dropzone .icon-check { display: none; }
 .dropzone.has-file .icon-check { display: inline; color: var(--good); }
+
+/* ---------- History ----------
+   The run log is the page's evidence, so it gets a summary strip, type
+   filters, and a two-line timestamp: the exact time to quote, and the
+   relative one to read. */
+
+.head-actions { display: flex; align-items: center; gap: .5rem; margin-left: auto; }
+
+.filter-row { display: flex; align-items: center; gap: .45rem; flex-wrap: wrap; margin-bottom: .9rem; }
+.chip {
+  display: inline-flex; align-items: center; gap: .4rem;
+  padding: .3rem .7rem; border-radius: 999px;
+  font-size: .78rem; font-weight: 600; text-decoration: none;
+  color: var(--ink-2); background: var(--surface); border: 1px solid var(--line-strong);
+}
+.chip:hover { background: var(--surface-sunk); color: var(--ink); }
+.chip span {
+  font-size: .7rem; font-weight: 600; font-variant-numeric: tabular-nums;
+  color: var(--ink-muted);
+}
+.chip.is-on { background: var(--series-1); border-color: var(--series-1); color: #fff; }
+.chip.is-on span { color: rgba(255, 255, 255, .8); }
+.filter-note { margin-left: auto; font-size: .75rem; color: var(--ink-muted); }
+
+.when { display: block; }
+.when-rel { display: block; font-size: .72rem; color: var(--ink-muted); }
+
+.cell-note { color: var(--ink-muted); font-size: .72rem; margin-left: .35rem; }
+.attacks-hot { color: var(--critical); font-weight: 620; }
+
+/* Dataset names run long; the cell keeps its width and the title attribute
+   carries the full name. */
+.filename {
+  display: inline-block; max-width: 26ch;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom;
+}
+
+.table-note { font-size: .78rem; color: var(--ink-muted); margin-top: .9rem; }
+.table-note code { font-size: .95em; }
+
+@media (max-width: 640px) {
+  .filter-note { margin-left: 0; width: 100%; }
+}
