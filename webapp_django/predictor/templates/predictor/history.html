@@ -19,7 +19,7 @@
     {% endif %}
     <div class="head-actions">
       {% if total %}
-        <a class="btn btn-ghost btn-sm" href="{% url 'download_history' %}">Download log</a>
+        <a class="btn btn-ghost btn-sm" href="{% url 'download_history' %}">Download CSV</a>
         {% if not confirming %}
           <a class="btn btn-ghost btn-sm" href="{% url 'history' %}?confirm=clear{% if kind %}&amp;kind={{ kind }}{% endif %}">Clear history</a>
         {% endif %}
@@ -36,7 +36,7 @@
       <div class="confirm-text">
         <strong>Delete all {{ total }} run{{ total|pluralize }}?</strong>
         This erases the log file on the server and cannot be undone —
-        <a href="{% url 'download_history' %}">download the log</a> first if you need the record.
+        <a href="{% url 'download_history' %}">download the CSV</a> first if you need the record.
       </div>
       <form method="post" action="{% url 'clear_history' %}">
         {% csrf_token %}
@@ -158,8 +158,8 @@
       <p class="table-note">
         Runs are appended to <code>{{ log_name }}</code> on the server, one JSON object per line.
         {% if truncated %}This page reads the {{ window }} most recent, and the tiles above cover those;
-        <a href="{% url 'download_history' %}">download the log</a> for all {{ total }}.
-        {% else %}<a href="{% url 'download_history' %}">Download it</a> to chart the runs elsewhere.{% endif %}
+        <a href="{% url 'download_history' %}">download the CSV</a> for all {{ total }}.
+        {% else %}<a href="{% url 'download_history' %}">Download the CSV</a> to chart the runs in a spreadsheet.{% endif %}
       </p>
     </div>
   {% else %}

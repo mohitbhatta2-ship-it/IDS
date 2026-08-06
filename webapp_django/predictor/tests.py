@@ -5,6 +5,8 @@ Run with:
     python manage.py test predictor
 """
 
+import csv
+import io
 import tempfile
 from pathlib import Path
 
@@ -309,12 +311,62 @@ class HistoryViewTests(TestCase):
         self.assertNotContains(self.client.get("/history/?kind=manual"), "traffic.csv")
         self.assertContains(self.client.get("/history/?kind=batch"), "traffic.csv")
 
-    def test_the_log_can_be_downloaded_as_jsonl(self):
-        history_log.record(kind=history_log.MANUAL, model_name="MLP", predicted_label="Bot")
+    def _download(self):
         response = self.client.get("/history/download/")
         self.assertEqual(response.status_code, 200)
-        self.assertIn("attachment", response["Content-Disposition"])
-        self.assertIn("Bot", response.content.decode())
+        return list(csv.reader(io.StringIO(response.content.decode())))
+
+    def test_the_log_can_be_downloaded_as_csv(self):
+        history_log.record(
+            kind=history_log.MANUAL, model_name="MLP", predicted_label="Bot",
+            confidence=0.9931, row_count=1, attack_count=1,
+        )
+        response = self.client.get("/history/download/")
+
+        self.assertIn("text/csv", response["Content-Type"])
+        self.assertIn('filename="prediction-history.csv"', response["Content-Disposition"])
+
+        header, row = list(csv.reader(io.StringIO(response.content.decode())))
+        self.assertEqual(header[:5], ["when", "type", "model", "predicted_class", "confidence"])
+        self.assertEqual(row[1:5], ["Manual entry", "MLP", "Bot", "0.993100"])
+
+    def test_an_upload_and_a_manual_entry_share_one_set_of_columns(self):
+        """Each fills its own cells; the rest are empty rather than guessed at."""
+        history_log.record(
+            kind=history_log.BATCH, model_name="XGBoost", source_filename="traffic.csv",
+            row_count=200, attack_count=50, accuracy=0.93, macro_f1=0.9,
+        )
+        header, row = self._download()
+        cells = dict(zip(header, row))
+
+        self.assertEqual(cells["source_file"], "traffic.csv")
+        self.assertEqual(cells["rows"], "200")
+        self.assertEqual(cells["attack_share"], "0.250000")
+        self.assertEqual(cells["accuracy"], "0.930000")
+        self.assertEqual(cells["predicted_class"], "", "an upload has no single prediction")
+        self.assertEqual(cells["confidence"], "")
+
+    def test_an_unscored_upload_leaves_the_score_cells_empty(self):
+        """Empty, not 0 -- a spreadsheet would average a zero into the column."""
+        history_log.record(
+            kind=history_log.BATCH, model_name="XGBoost", source_filename="raw.csv", row_count=5,
+        )
+        header, row = self._download()
+        cells = dict(zip(header, row))
+        self.assertEqual(cells["accuracy"], "")
+        self.assertEqual(cells["macro_f1"], "")
+
+    def test_the_download_covers_runs_older_than_the_page_window(self):
+        """The page reads a window; an export that quietly stopped there would lie."""
+        for i in range(history_log.SCAN_LINES + 5):
+            history_log.record(kind=history_log.MANUAL, model_name="MLP", predicted_label=f"run-{i}")
+
+        rows = self._download()[1:]
+        self.assertEqual(len(rows), history_log.SCAN_LINES + 5)
+        self.assertEqual(rows[0][3], "run-0", "oldest first, like the log itself")
+
+    def test_an_empty_log_downloads_as_a_header_row(self):
+        self.assertEqual(len(self._download()), 1)
 
     def test_clearing_empties_the_page(self):
         history_log.record(kind=history_log.MANUAL, model_name="MLP", predicted_label="Bot")
