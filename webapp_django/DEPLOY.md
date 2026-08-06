@@ -55,11 +55,25 @@ The free tier sleeps after inactivity, so the first request after a nap takes
 30–60 s — and this app additionally unpickles ~12 MB of models on first
 prediction. Expect a slow first hit, then fast ones.
 
+## Prediction history
+
+Every classification run is appended to `logs/predictions.jsonl` — one JSON
+object per line — and the History page reads it back. Hosts with ephemeral disks
+wipe that file on every deploy, so history will not survive unless the log lives
+somewhere that does:
+
+```
+IDS_HISTORY_LOG=/var/data/predictions.jsonl   # a mounted persistent disk
+```
+
+Render's free plan has no disks, so history there lasts as long as the container
+— fine for a demo, not for anything you need to keep. The log rotates at 4 MB,
+keeping one previous file beside it.
+
 ## Database
 
-Works as-is on SQLite, which is the simplest thing that runs. Note that hosts
-with ephemeral disks reset SQLite on every deploy, so prediction history will not
-survive — fine for a demo, not for anything you need to keep.
+Works as-is on SQLite, which is the simplest thing that runs. Nothing the app
+shows is stored there any more, so a reset database costs nothing.
 
 For MySQL, set `IDS_DB_ENGINE=mysql` plus the credentials and create the database
 first:

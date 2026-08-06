@@ -1,14 +1,17 @@
 """
-Tests for the dataset column mapping.
+Tests for the dataset column mapping, batch scoring, and the run history log.
 
 Run with:
     python manage.py test predictor
 """
 
-import pandas as pd
-from django.test import TestCase
+import tempfile
+from pathlib import Path
 
-from . import ml
+import pandas as pd
+from django.test import TestCase, override_settings
+
+from . import history_log, ml
 from .column_mapping import ALIASES, map_columns, normalise
 
 
@@ -168,3 +171,174 @@ class EvaluationTests(TestCase):
         self.assertIsNone(result["evaluation"])
         self.assertFalse(result["has_label_column"])
         self.assertIsNone(result["label_unusable"])
+
+
+class HistoryLogTests(TestCase):
+    """The run log is the whole of the history feature, so it is tested directly."""
+
+    def setUp(self):
+        self._dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._dir.cleanup)
+        self.path = Path(self._dir.name) / "nested" / "predictions.jsonl"
+        patch = override_settings(HISTORY_LOG_PATH=self.path)
+        patch.enable()
+        self.addCleanup(patch.disable)
+
+    def _batch(self, filename="a.csv", **extra):
+        return history_log.record(
+            kind=history_log.BATCH, model_key="hgb", model_name="HistGradientBoosting",
+            source_filename=filename, row_count=10, attack_count=4, **extra,
+        )
+
+    def test_reading_a_log_that_does_not_exist_yet_is_empty_not_an_error(self):
+        self.assertEqual(history_log.recent(), [])
+        self.assertEqual(history_log.count(), 0)
+
+    def test_a_run_survives_the_round_trip_through_the_file(self):
+        self._batch(accuracy=0.91, macro_f1=0.88)
+
+        (run,) = history_log.recent()
+        self.assertEqual(run.source_filename, "a.csv")
+        self.assertEqual(run.row_count, 10)
+        self.assertAlmostEqual(run.accuracy, 0.91)
+        self.assertTrue(run.was_evaluated)
+        self.assertIsNotNone(run.at, "the timestamp must come back as a datetime")
+
+    def test_the_directory_is_created_on_first_write(self):
+        self._batch()
+        self.assertTrue(self.path.exists())
+
+    def test_newest_run_comes_back_first(self):
+        self._batch("first.csv")
+        self._batch("second.csv")
+        self.assertEqual([r.source_filename for r in history_log.recent()], ["second.csv", "first.csv"])
+
+    def test_a_zero_score_is_kept_rather_than_read_as_missing(self):
+        """0.0 is a real result. Dropping it would blank the column instead."""
+        self._batch(accuracy=0.0, macro_f1=0.0)
+        (run,) = history_log.recent()
+        self.assertTrue(run.was_evaluated)
+        self.assertEqual(run.accuracy, 0.0)
+
+    def test_a_truncated_final_line_costs_only_that_run(self):
+        """A restart mid-write must not take the whole history page down."""
+        self._batch("good.csv")
+        with self.path.open("a", encoding="utf-8") as handle:
+            handle.write('{"kind": "batch", "source_filename": "cut-o')
+
+        runs = history_log.recent()
+        self.assertEqual([r.source_filename for r in runs], ["good.csv"])
+
+    def test_an_unwritable_log_does_not_break_the_prediction(self):
+        blocker = Path(self._dir.name) / "not-a-directory"
+        blocker.write_text("")
+        with override_settings(HISTORY_LOG_PATH=blocker / "predictions.jsonl"):
+            run = history_log.record(kind=history_log.MANUAL, model_name="MLP", predicted_label="Bot")
+        self.assertEqual(run.predicted_label, "Bot")
+
+    def test_manual_runs_are_recognised_as_attacks_by_label(self):
+        history_log.record(kind=history_log.MANUAL, model_name="MLP", predicted_label="Benign")
+        history_log.record(kind=history_log.MANUAL, model_name="MLP", predicted_label="Bot")
+
+        attack, benign = history_log.recent()
+        self.assertTrue(attack.is_attack)
+        self.assertFalse(benign.is_attack)
+
+    def test_count_covers_runs_older_than_the_read_window(self):
+        for i in range(5):
+            self._batch(f"{i}.csv")
+        self.assertEqual(len(history_log.recent(limit=2)), 2)
+        self.assertEqual(history_log.count(), 5)
+
+    def test_rotation_keeps_the_older_runs_readable(self):
+        self._batch("old.csv")
+        # Rotate by hand rather than writing 4 MB of runs.
+        self.path.rename(self.path.with_name(self.path.name + ".1"))
+        self._batch("new.csv")
+
+        self.assertEqual(history_log.count(), 2)
+        self.assertEqual([r.source_filename for r in history_log.recent()], ["new.csv", "old.csv"])
+
+    def test_clearing_removes_the_log_and_its_rotated_predecessor(self):
+        self._batch("old.csv")
+        self.path.rename(self.path.with_name(self.path.name + ".1"))
+        self._batch("new.csv")
+
+        history_log.clear()
+        self.assertEqual(history_log.count(), 0)
+
+    def test_summary_rolls_the_runs_up(self):
+        self._batch("a.csv", accuracy=0.90, macro_f1=0.8)
+        self._batch("b.csv", accuracy=0.80, macro_f1=0.7)
+        self._batch("c.csv")  # unlabelled, so it must not drag the mean down
+
+        summary = history_log.summarise(history_log.recent())
+        self.assertEqual(summary.runs, 3)
+        self.assertEqual(summary.flows, 30)
+        self.assertEqual(summary.attacks, 12)
+        self.assertEqual(summary.scored_runs, 2)
+        self.assertAlmostEqual(summary.mean_accuracy, 0.85)
+
+
+class HistoryViewTests(TestCase):
+    def setUp(self):
+        self._dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._dir.cleanup)
+        patch = override_settings(HISTORY_LOG_PATH=Path(self._dir.name) / "predictions.jsonl")
+        patch.enable()
+        self.addCleanup(patch.disable)
+
+    def test_empty_log_renders_the_empty_state(self):
+        response = self.client.get("/history/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Nothing yet")
+
+    def test_a_recorded_run_appears_on_the_page(self):
+        history_log.record(
+            kind=history_log.BATCH, model_key="hgb", model_name="HistGradientBoosting",
+            source_filename="traffic.csv", row_count=200, attack_count=25, accuracy=0.93, macro_f1=0.9,
+        )
+        response = self.client.get("/history/")
+        self.assertContains(response, "traffic.csv")
+        self.assertContains(response, "0.9300")
+
+    def test_the_type_filter_narrows_the_table(self):
+        history_log.record(kind=history_log.BATCH, model_name="HGB", source_filename="traffic.csv", row_count=2)
+        history_log.record(kind=history_log.MANUAL, model_name="MLP", predicted_label="Bot", row_count=1)
+
+        self.assertNotContains(self.client.get("/history/?kind=manual"), "traffic.csv")
+        self.assertContains(self.client.get("/history/?kind=batch"), "traffic.csv")
+
+    def test_the_log_can_be_downloaded_as_jsonl(self):
+        history_log.record(kind=history_log.MANUAL, model_name="MLP", predicted_label="Bot")
+        response = self.client.get("/history/download/")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("attachment", response["Content-Disposition"])
+        self.assertIn("Bot", response.content.decode())
+
+    def test_clearing_empties_the_page(self):
+        history_log.record(kind=history_log.MANUAL, model_name="MLP", predicted_label="Bot")
+        self.client.post("/history/clear/")
+        self.assertContains(self.client.get("/history/"), "Nothing yet")
+
+    def test_clearing_asks_for_confirmation_first(self):
+        history_log.record(kind=history_log.MANUAL, model_name="MLP", predicted_label="Bot")
+
+        response = self.client.get("/history/?confirm=clear")
+        self.assertContains(response, "Delete all 1 run?")
+        self.assertEqual(history_log.count(), 1, "asking must not delete anything")
+
+    def test_the_page_does_not_offer_the_confirmation_unasked(self):
+        history_log.record(kind=history_log.MANUAL, model_name="MLP", predicted_label="Bot")
+        self.assertNotContains(self.client.get("/history/"), "confirm-bar")
+
+    def test_the_confirmation_keeps_the_active_filter_on_cancel(self):
+        history_log.record(kind=history_log.MANUAL, model_name="MLP", predicted_label="Bot")
+        response = self.client.get("/history/?confirm=clear&kind=manual")
+        self.assertContains(response, 'href="/history/?kind=manual"')
+
+    def test_clearing_still_needs_a_post(self):
+        """The confirmation is a GET; only the POST behind it may delete."""
+        history_log.record(kind=history_log.MANUAL, model_name="MLP", predicted_label="Bot")
+        self.assertEqual(self.client.get("/history/clear/").status_code, 405)
+        self.assertEqual(history_log.count(), 1)

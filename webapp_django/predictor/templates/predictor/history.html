@@ -1,77 +1,165 @@
 {% extends "predictor/base.html" %}
+{% load humanize %}
 {% block title %}History{% endblock %}
 
 {% block content %}
 <div class="page-head">
   <h1>Prediction history</h1>
-  <p>Every classification run is recorded, so you can show what was tested and what came back.</p>
+  <p>
+    Every classification run is appended to a log file on the server, so you can show what was
+    tested and what came back — and take the log away with you.
+  </p>
 </div>
 
 <div class="card" style="margin-bottom: 3rem;">
   <div class="card-head">
     <h2>{{ total }} run{{ total|pluralize }}</h2>
-    {% if total %}
-      <form method="post" action="{% url 'clear_history' %}" style="margin-left: auto;">
-        {% csrf_token %}
-        <button type="submit" class="btn btn-ghost btn-sm">Clear history</button>
-      </form>
+    {% if summary.last_at %}
+      <p>Last run {{ summary.last_at|date:"j M Y, H:i" }}</p>
     {% endif %}
+    <div class="head-actions">
+      {% if total %}
+        <a class="btn btn-ghost btn-sm" href="{% url 'download_history' %}">Download log</a>
+        {% if not confirming %}
+          <a class="btn btn-ghost btn-sm" href="{% url 'history' %}?confirm=clear{% if kind %}&amp;kind={{ kind }}{% endif %}">Clear history</a>
+        {% endif %}
+      {% endif %}
+    </div>
   </div>
 
-  {% if logs %}
+  {% if confirming and total %}
+    {% comment %}
+      Deleting the log cannot be undone, so the destructive click is a second
+      one, and it says how much is about to go.
+    {% endcomment %}
+    <div class="confirm-bar">
+      <div class="confirm-text">
+        <strong>Delete all {{ total }} run{{ total|pluralize }}?</strong>
+        This erases the log file on the server and cannot be undone —
+        <a href="{% url 'download_history' %}">download the log</a> first if you need the record.
+      </div>
+      <form method="post" action="{% url 'clear_history' %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger btn-sm">Yes, delete {{ total }} run{{ total|pluralize }}</button>
+      </form>
+      <a class="btn btn-ghost btn-sm" href="{% url 'history' %}{% if kind %}?kind={{ kind }}{% endif %}">Cancel</a>
+    </div>
+  {% endif %}
+
+  {% if total %}
     <div class="card-body">
-      <div class="table-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th>When</th>
-              <th>Type</th>
-              <th>Model</th>
-              <th>Result</th>
-              <th class="num">Rows</th>
-              <th class="num">Accuracy</th>
-              <th class="num">Macro F1</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for log in logs %}
-              <tr>
-                <td>{{ log.created_at|date:"j M Y, H:i" }}</td>
-                <td>{{ log.get_kind_display }}</td>
-                <td>{{ log.model_name }}</td>
-                <td>
-                  {% if log.kind == 'manual' %}
-                    <span class="pill {% if log.is_attack %}is-attack{% else %}is-benign{% endif %}">
-                      <span class="dot"></span>{{ log.predicted_label }}
-                    </span>
-                    <span style="color: var(--ink-muted); font-size: .76rem;">{{ log.confidence|floatformat:4 }}</span>
-                  {% else %}
-                    {{ log.source_filename }}
-                    <span style="color: var(--ink-muted); font-size: .76rem;">· {{ log.attack_count }} attacks</span>
-                  {% endif %}
-                </td>
-                <td class="num">
-                  {% if log.row_count %}{{ log.row_count }}
-                  {% else %}<span class="na" title="{{ log.blank_reason }}">—</span>{% endif %}
-                </td>
-                <td class="num">
-                  {% if log.was_evaluated %}{{ log.accuracy|floatformat:4 }}
-                  {% else %}<span class="na" title="{{ log.blank_reason }}">—</span>{% endif %}
-                </td>
-                <td class="num">
-                  {% if log.was_evaluated %}{{ log.macro_f1|floatformat:4 }}
-                  {% else %}<span class="na" title="{{ log.blank_reason }}">—</span>{% endif %}
-                </td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+      <div class="tiles" style="margin-bottom: 1.25rem;">
+        <div class="tile">
+          <div class="k">Runs</div>
+          <div class="v">{{ summary.runs }}</div>
+          <div class="s">
+            {% if kind %}filtered to {% if kind == 'manual' %}manual entries{% else %}dataset uploads{% endif %}
+            {% else %}{{ counts.manual }} manual · {{ counts.batch }} upload{{ counts.batch|pluralize }}{% endif %}
+          </div>
+        </div>
+        <div class="tile">
+          <div class="k">Flows classified</div>
+          <div class="v">{{ summary.flows }}</div>
+          <div class="s">across the runs listed below</div>
+        </div>
+        <div class="tile {% if summary.attacks %}accent-critical{% endif %}">
+          <div class="k">Flagged as attack</div>
+          <div class="v">{{ summary.attacks }}</div>
+          <div class="s">{{ summary.attack_pct|floatformat:1 }}% of flows seen</div>
+        </div>
+        <div class="tile {% if summary.mean_accuracy %}accent-good{% endif %}">
+          <div class="k">Mean accuracy</div>
+          <div class="v">
+            {% if summary.mean_accuracy %}{{ summary.mean_accuracy|floatformat:4 }}
+            {% else %}<span class="na" title="No run so far carried a Label column, so nothing has been scored.">—</span>{% endif %}
+          </div>
+          <div class="s">
+            {% if summary.scored_runs %}over {{ summary.scored_runs }} scored upload{{ summary.scored_runs|pluralize }}
+            {% else %}no labelled upload yet{% endif %}
+          </div>
+        </div>
       </div>
 
-      <p style="font-size: .78rem; color: var(--ink-muted); margin-top: .9rem;">
+      <div class="filter-row">
+        <a class="chip {% if not kind %}is-on{% endif %}" href="{% url 'history' %}">All<span>{{ window }}</span></a>
+        <a class="chip {% if kind == 'manual' %}is-on{% endif %}" href="{% url 'history' %}?kind=manual">Manual entries<span>{{ counts.manual }}</span></a>
+        <a class="chip {% if kind == 'batch' %}is-on{% endif %}" href="{% url 'history' %}?kind=batch">Dataset uploads<span>{{ counts.batch }}</span></a>
+        {% if summary.models %}
+          <span class="filter-note">Models used: {{ summary.models|join:", " }}</span>
+        {% endif %}
+      </div>
+
+      {% if runs %}
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>When</th>
+                <th>Type</th>
+                <th>Model</th>
+                <th>Result</th>
+                <th class="num">Rows</th>
+                <th class="num">Attacks</th>
+                <th class="num">Accuracy</th>
+                <th class="num">Macro F1</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for run in runs %}
+                <tr>
+                  <td>
+                    <span class="when">{{ run.at|date:"j M Y, H:i" }}</span>
+                    <span class="when-rel">{{ run.at|naturaltime }}</span>
+                  </td>
+                  <td><span class="pill">{{ run.kind_display }}</span></td>
+                  <td>{{ run.model_name }}</td>
+                  <td>
+                    {% if run.is_manual %}
+                      <span class="pill {% if run.is_attack %}is-attack{% else %}is-benign{% endif %}">
+                        <span class="dot"></span>{{ run.predicted_label }}
+                      </span>
+                      <span class="cell-note">{{ run.confidence|floatformat:4 }} confidence</span>
+                    {% else %}
+                      <span class="filename" title="{{ run.source_filename }}">{{ run.source_filename }}</span>
+                    {% endif %}
+                  </td>
+                  <td class="num">
+                    {% if run.row_count %}{{ run.row_count }}
+                    {% else %}<span class="na" title="{{ run.blank_reason }}">—</span>{% endif %}
+                  </td>
+                  <td class="num">
+                    {% if run.row_count %}
+                      <span class="{% if run.attack_count %}attacks-hot{% endif %}">{{ run.attack_count }}</span>
+                      <span class="cell-note">{{ run.attack_pct|floatformat:1 }}%</span>
+                    {% else %}<span class="na" title="{{ run.blank_reason }}">—</span>{% endif %}
+                  </td>
+                  <td class="num">
+                    {% if run.was_evaluated %}{{ run.accuracy|floatformat:4 }}
+                    {% else %}<span class="na" title="{{ run.blank_reason }}">—</span>{% endif %}
+                  </td>
+                  <td class="num">
+                    {% if run.was_evaluated %}{{ run.macro_f1|floatformat:4 }}
+                    {% else %}<span class="na" title="{{ run.blank_reason }}">—</span>{% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="empty">No {% if kind == 'manual' %}manual entries{% else %}dataset uploads{% endif %} recorded yet.</p>
+      {% endif %}
+
+      <p class="table-note">
         Accuracy and Macro F1 need ground truth, so they are only recorded when the uploaded file
         carried a <code>Label</code> column. Uploads without one, and manual entries — which classify
         a single flow — show <span class="na">—</span> instead. Hover any dash for the reason.
+      </p>
+      <p class="table-note">
+        Runs are appended to <code>{{ log_name }}</code> on the server, one JSON object per line.
+        {% if truncated %}This page reads the {{ window }} most recent, and the tiles above cover those;
+        <a href="{% url 'download_history' %}">download the log</a> for all {{ total }}.
+        {% else %}<a href="{% url 'download_history' %}">Download it</a> to chart the runs elsewhere.{% endif %}
       </p>
     </div>
   {% else %}

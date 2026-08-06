@@ -1,12 +1,11 @@
 import json
 
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_http_methods
 
-from . import classes, ml
+from . import classes, history_log, ml
 from .forms import BatchUploadForm, ManualFlowForm
-from .models import PredictionLog
 
 
 def _base_context(active: str) -> dict:
@@ -117,8 +116,8 @@ def api_predict(request):
     except (FileNotFoundError, ValueError) as exc:
         return JsonResponse({"error": str(exc)}, status=503)
 
-    PredictionLog.objects.create(
-        kind=PredictionLog.MANUAL,
+    history_log.record(
+        kind=history_log.MANUAL,
         model_key=result["model_key"],
         model_name=result["model"],
         predicted_label=result["label"],
@@ -164,8 +163,8 @@ def batch(request):
     out_frame = result.pop("frame")
 
     evaluation = result.get("evaluation")
-    PredictionLog.objects.create(
-        kind=PredictionLog.BATCH,
+    history_log.record(
+        kind=history_log.BATCH,
         model_key=result["model_key"],
         model_name=result["model"],
         source_filename=upload.name,
@@ -198,13 +197,53 @@ def batch(request):
 
 
 def history(request):
+    """
+    Read the run log back. Everything shown is derived from the file, so the
+    page is an honest view of what is on disk -- if the log is empty, the app
+    genuinely has no record of a run.
+    """
     context = _base_context("history")
-    context["logs"] = PredictionLog.objects.all()[:100]
-    context["total"] = PredictionLog.objects.count()
+
+    kind = request.GET.get("kind", "")
+    if kind not in (history_log.MANUAL, history_log.BATCH):
+        kind = ""
+
+    window = history_log.recent()
+    runs = [r for r in window if r.kind == kind] if kind else window
+    total = history_log.count()
+
+    context.update(
+        {
+            "runs": runs,
+            "summary": history_log.summarise(runs),
+            "total": total,
+            "window": len(window),
+            # True when the log is longer than the page reads, so the footnote
+            # can say the totals cover recent runs rather than all of them.
+            "truncated": total > len(window),
+            "kind": kind,
+            # Clearing is a two-step: this renders the confirmation bar rather
+            # than letting one click delete the log.
+            "confirming": request.GET.get("confirm") == "clear",
+            "counts": {
+                "manual": sum(1 for r in window if r.is_manual),
+                "batch": sum(1 for r in window if not r.is_manual),
+            },
+            "log_name": history_log.log_path().name,
+        }
+    )
     return render(request, "predictor/history.html", context)
+
+
+def download_history(request):
+    """Serve the raw log, so a run can be replayed or charted outside the app."""
+    text = history_log.raw_text()
+    response = HttpResponse(text, content_type="application/x-ndjson")
+    response["Content-Disposition"] = 'attachment; filename="prediction-history.jsonl"'
+    return response
 
 
 @require_http_methods(["POST"])
 def clear_history(request):
-    PredictionLog.objects.all().delete()
+    history_log.clear()
     return redirect("history")

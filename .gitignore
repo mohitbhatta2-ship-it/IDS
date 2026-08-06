@@ -26,6 +26,8 @@ __pycache__/
 # Django web app
 .venv/
 webapp_django/db.sqlite3
+# Prediction history log -- written at runtime, one JSON object per run
+webapp_django/logs/
 webapp_django/media/
 webapp_django/staticfiles/
 
