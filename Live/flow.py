@@ -56,12 +56,18 @@ class Flow:
     forward_header_lengths: list = field(default_factory=list)
     backward_header_lengths: list = field(default_factory=list)
 
-    # TCP Window
+    # TCP Window.
+    #
+    # The receive window advertised on the first forward packet. None means no
+    # forward TCP packet has been seen yet; feature_calculator maps that to -1,
+    # which is the sentinel CICFlowMeter uses for flows with no forward window
+    # (UDP, or a flow captured mid-stream).
     init_fwd_win_bytes: Optional[int] = None
 
-    # Segment sizes
-    forward_segment_sizes: list = field(default_factory=list)
-    backward_segment_sizes: list = field(default_factory=list)
+    # Segment sizes are no longer stored separately: CICFlowMeter defines the
+    # forward/backward "segment size" as the payload length, which is exactly
+    # what forward_packet_lengths / backward_packet_lengths already hold. Keeping
+    # a second copy only risked the two drifting apart.
 
     @property
     def duration(self) -> float:

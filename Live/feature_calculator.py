@@ -42,6 +42,14 @@ def iat_stats(times):
 
 
 def calculate_features(flow):
+    # Two feature definitions are less obvious than their names suggest, and both
+    # were wrong before -- matching CICFlowMeter here matters more than the name:
+    #
+    #   * "Fwd Seg Size Min" is the minimum forward *header* length (min_seg_size_
+    #     forward), not a payload size. Its training values are 8/20/32/40 bytes --
+    #     UDP and TCP header sizes -- so it is read from forward_header_lengths.
+    #   * "Init Fwd Win Byts" is -1, not 0, when the flow has no forward TCP
+    #     window (UDP, or a flow captured mid-stream); the training data uses -1.
 
     duration_sec = flow.last_seen - flow.start_time
 
@@ -59,7 +67,7 @@ def calculate_features(flow):
     features = {
 
         "Init Fwd Win Byts":
-            flow.init_fwd_win_bytes or 0,
+            flow.init_fwd_win_bytes if flow.init_fwd_win_bytes is not None else -1,
 
         "Fwd IAT Tot":
             fwd_iat_total,
@@ -95,7 +103,7 @@ def calculate_features(flow):
             safe_mean(flow.forward_packet_lengths),
 
         "Fwd Seg Size Avg":
-            safe_mean(flow.forward_segment_sizes),
+            safe_mean(flow.forward_packet_lengths),
 
         "Fwd Pkt Len Max":
             safe_max(flow.forward_packet_lengths),
@@ -122,7 +130,7 @@ def calculate_features(flow):
             safe_mean(flow.all_packet_lengths),
 
         "Bwd Seg Size Avg":
-            safe_mean(flow.backward_segment_sizes),
+            safe_mean(flow.backward_packet_lengths),
 
         "Bwd Pkt Len Max":
             safe_max(flow.backward_packet_lengths),
@@ -143,7 +151,7 @@ def calculate_features(flow):
             flow_iat_min,
 
         "Fwd Seg Size Min":
-            safe_min(flow.forward_segment_sizes),
+            safe_min(flow.forward_header_lengths),
 
         "Fwd Pkt Len Std":
             safe_std(flow.forward_packet_lengths)

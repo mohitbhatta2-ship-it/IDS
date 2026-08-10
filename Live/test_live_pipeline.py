@@ -150,6 +150,106 @@ def test_udp_header_length_is_eight():
 
 
 # --------------------------------------------------------------------------
+# Feature parity -- packet length is the payload, not the whole frame
+# --------------------------------------------------------------------------
+
+
+def test_packet_length_is_the_payload_not_the_frame():
+    """
+    CICFlowMeter measures the L4 payload. The old code used len(pkt), which adds
+    the IP+TCP headers (40 bytes here) and inflated every length feature.
+    """
+    flow = get_or_create_flow(packet())
+    update_flow(flow, packet(payload=100, ts=BASE_TS))
+
+    # 100-byte payload -- not 140 (payload + 20B IP + 20B TCP).
+    assert flow.forward_packet_lengths == [100]
+    assert flow.forward_bytes == 100
+    assert flow.total_bytes == 100
+
+    features = calculate_features(flow)
+    assert features["Fwd Pkt Len Max"] == 100
+    assert features["TotLen Fwd Pkts"] == 100
+    assert features["Subflow Fwd Byts"] == 100
+
+
+def test_segment_size_avg_equals_packet_length_mean():
+    """
+    CICFlowMeter defines "Fwd/Bwd Seg Size Avg" identically to the matching
+    "Pkt Len Mean". The training presets satisfy this exactly; live features must
+    too, in both directions and for UDP as well as TCP.
+    """
+    flow = get_or_create_flow(packet())
+    update_flow(flow, packet(payload=100, ts=BASE_TS))
+    update_flow(flow, packet(payload=40, ts=BASE_TS + 0.1))
+    update_flow(flow, packet(src="93.184.216.34", dst="10.0.0.5",
+                             sport=80, dport=51000, payload=60, ts=BASE_TS + 0.2))
+
+    features = calculate_features(flow)
+    assert features["Fwd Seg Size Avg"] == pytest.approx(features["Fwd Pkt Len Mean"])
+    assert features["Bwd Seg Size Avg"] == pytest.approx(features["Bwd Pkt Len Mean"])
+
+
+def test_udp_segment_size_avg_matches_packet_length_mean():
+    pkt = packet(proto="udp", dport=53, payload=50, ts=BASE_TS)
+    flow = get_or_create_flow(pkt)
+    update_flow(flow, pkt)
+
+    features = calculate_features(flow)
+    assert features["Fwd Pkt Len Mean"] == pytest.approx(50)
+    assert features["Fwd Seg Size Avg"] == pytest.approx(50)
+
+
+# --------------------------------------------------------------------------
+# Feature parity -- Fwd Seg Size Min is a header measure
+# --------------------------------------------------------------------------
+
+
+def test_fwd_seg_size_min_is_the_minimum_forward_header():
+    """
+    'Fwd Seg Size Min' (min_seg_size_forward) is the smallest forward header, not
+    a payload size. A TCP flow's minimum header is 20 bytes; the old code read
+    the payload here and produced 0, which is outside the training range (8-44).
+    """
+    flow = get_or_create_flow(packet())
+    update_flow(flow, packet(payload=0, ts=BASE_TS))          # bare TCP, 20B header
+    update_flow(flow, packet(payload=500, ts=BASE_TS + 0.1))  # data, still 20B header
+
+    features = calculate_features(flow)
+    assert features["Fwd Seg Size Min"] == 20
+
+
+def test_fwd_seg_size_min_is_eight_for_udp():
+    pkt = packet(proto="udp", dport=53, payload=0, ts=BASE_TS)
+    flow = get_or_create_flow(pkt)
+    update_flow(flow, pkt)
+    assert calculate_features(flow)["Fwd Seg Size Min"] == 8
+
+
+# --------------------------------------------------------------------------
+# Feature parity -- Init Fwd Win Byts uses -1, not 0, when there is no window
+# --------------------------------------------------------------------------
+
+
+def test_init_fwd_win_byts_captured_from_first_forward_tcp_packet():
+    flow = get_or_create_flow(packet())
+    update_flow(flow, packet(ts=BASE_TS))  # scapy's default TCP window is 8192
+    assert flow.init_fwd_win_bytes == 8192
+    assert calculate_features(flow)["Init Fwd Win Byts"] == 8192
+
+
+def test_init_fwd_win_byts_is_minus_one_for_udp():
+    """No forward TCP window exists, so it must be -1 (the CICFlowMeter sentinel),
+    not 0 -- 0 is a real, distinct window size."""
+    pkt = packet(proto="udp", dport=53, ts=BASE_TS)
+    flow = get_or_create_flow(pkt)
+    update_flow(flow, pkt)
+
+    assert flow.init_fwd_win_bytes is None
+    assert calculate_features(flow)["Init Fwd Win Byts"] == -1
+
+
+# --------------------------------------------------------------------------
 # Expiry -- the crash, and the capture clock
 # --------------------------------------------------------------------------
 

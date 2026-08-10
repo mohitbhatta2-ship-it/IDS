@@ -190,17 +190,28 @@ python Live/validate_live_features.py                   # feature-parity report
 CICFlowMeter output, and `feature_calculator.py` is a hand-written
 reimplementation of 30 of those features. If a definition differs, the model gets
 out-of-distribution input and its predictions are meaningless *even though the
-code runs cleanly*. Two known discrepancies remain:
+code runs cleanly*.
 
-| Feature | Here | CICFlowMeter |
+The three known discrepancies have now been closed:
+
+| Feature | Was | Now (matches CICFlowMeter) |
 |---|---|---|
-| `Fwd Seg Size Min` | derived from TCP payload lengths | a header measure |
-| `Init Fwd Win Byts` | defaults to `0` when absent | training data uses `-1` |
+| Packet / segment lengths | full frame, `len(pkt)` (Ethernet + IP + transport headers) | the L4 **payload** size |
+| `Fwd Seg Size Min` | derived from TCP payload lengths (always `0`) | the minimum forward **header** length |
+| `Init Fwd Win Byts` | defaulted to `0` when absent | `-1`, the sentinel for no forward window |
 
-Two others were closed by `c762129`: `FLOW_TIMEOUT` now matches CICFlowMeter's
-120 s, and `Fwd Header Len` now measures the transport header rather than the IP
+The packet-length fix is the widest: CICFlowMeter's length and byte features
+(`TotLen`, `Subflow`, `Pkt Len`, `Fwd/Bwd Pkt Len`, `Seg Size Avg`, `Pkt Size
+Avg`) all measure the payload, not the frame. The training data proves it — for
+every class `Fwd Pkt Len Mean` equals `Fwd Seg Size Avg`, and several class
+means fall below 54 bytes, impossible for a whole frame. Using `len(pkt)`
+inflated all of them out of the trained range.
+
+Two earlier gaps were closed by `c762129`: `FLOW_TIMEOUT` matches CICFlowMeter's
+120 s, and `Fwd Header Len` measures the transport header rather than the IP
 header. Run `validate_live_features.py` for a per-feature comparison against the
-training ranges before trusting a live result.
+training ranges before trusting a live result — on a synthetic mixed TCP/UDP
+capture every feature now sits inside the training range.
 
 ---
 
@@ -217,7 +228,7 @@ answer as a natively-named one.
 The live capture module has its own suite:
 
 ```bash
-python -m pytest Live/test_live_pipeline.py    # 15 tests
+python -m pytest Live/test_live_pipeline.py    # 22 tests
 ```
 
 `Live/test_prediction.py` is a command-line smoke script rather than a pytest
@@ -257,7 +268,7 @@ Two things to know about the free tier:
 - `app.py` at the repo root is a broken 45-line Flask stub referencing five
   templates that don't exist. It is not the web app; `webapp_django/` is.
 - `webapp_data/` and `c_filesnew/` largely duplicate each other.
-- Live capture has two unresolved feature-parity gaps (above).
+- Live capture is CLI-only; it is not yet wired into the Django web UI.
 - No `LICENSE` file yet. The CSE-CIC-IDS2018 dataset has its own terms — see the
   [dataset page](https://www.unb.ca/cic/datasets/ids-2018.html) before
   redistributing any data derived from it.

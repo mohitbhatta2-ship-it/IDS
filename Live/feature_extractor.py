@@ -36,32 +36,48 @@ def update_flow(flow, pkt):
 
     flow.last_seen = ts
 
-    packet_length = len(pkt)
-
-    flow.total_packets += 1
-    flow.total_bytes += packet_length
-
-    flow.all_packet_lengths.append(packet_length)
-    flow.all_packet_times.append(ts)
-
     ip = pkt[IP]
 
     forward = ip.src == flow.src_ip
 
+    # Packet length == transport PAYLOAD (segment) size, matching CICFlowMeter.
+    #
+    # CICFlowMeter's packet-length and segment-size features measure the L4
+    # payload, NOT the full frame. Two facts in the training data prove it: for
+    # every class "Fwd Pkt Len Mean" equals "Fwd Seg Size Avg" (CICFlowMeter
+    # defines them identically, as the mean payload size), and several classes
+    # have a mean below 54 bytes, which is impossible for a whole Ethernet frame.
+    # This code previously used len(pkt) -- Ethernet + IP + transport headers
+    # included -- which inflated every byte and length feature (TotLen, Subflow,
+    # Pkt Len, Seg Size Avg, Pkt Size Avg ...) and pushed them out of the range
+    # the models were trained on, even though nothing raised an error.
+    if TCP in pkt:
+        payload_length = len(pkt[TCP].payload)
+    elif UDP in pkt:
+        payload_length = len(pkt[UDP].payload)
+    else:
+        payload_length = len(ip.payload)
+
+    flow.total_packets += 1
+    flow.total_bytes += payload_length
+
+    flow.all_packet_lengths.append(payload_length)
+    flow.all_packet_times.append(ts)
+
     if forward:
 
         flow.forward_packets += 1
-        flow.forward_bytes += packet_length
+        flow.forward_bytes += payload_length
 
-        flow.forward_packet_lengths.append(packet_length)
+        flow.forward_packet_lengths.append(payload_length)
         flow.forward_packet_times.append(ts)
 
     else:
 
         flow.backward_packets += 1
-        flow.backward_bytes += packet_length
+        flow.backward_bytes += payload_length
 
-        flow.backward_packet_lengths.append(packet_length)
+        flow.backward_packet_lengths.append(payload_length)
         flow.backward_packet_times.append(ts)
 
     # Header length.
@@ -87,13 +103,9 @@ def update_flow(flow, pkt):
 
         tcp = pkt[TCP]
 
-        seg_size = len(tcp.payload)
-
-        if forward:
-            flow.forward_segment_sizes.append(seg_size)
-        else:
-            flow.backward_segment_sizes.append(seg_size)
-
+        # CICFlowMeter's "Init Fwd Win Byts" is the receive-window advertised on
+        # the FIRST forward packet. It stays None until we see one; a flow with
+        # no forward TCP packet (e.g. UDP) reports -1 -- see feature_calculator.
         if forward and flow.init_fwd_win_bytes is None:
             flow.init_fwd_win_bytes = tcp.window
 

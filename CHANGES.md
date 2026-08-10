@@ -237,16 +237,79 @@ points to verify before trusting any live result:
 - ~~`Fwd Header Len` is computed as `ip.ihl * 4`, the IP header length, whereas
   CICFlowMeter measures the transport header.~~ Fixed in `c762129` — now uses the
   TCP data offset, or 8 for UDP.
-- `Fwd Seg Size Min` is derived from TCP payload lengths here; CICFlowMeter's is
-  a header measure. **Still open.**
+- ~~`Fwd Seg Size Min` is derived from TCP payload lengths here; CICFlowMeter's is
+  a header measure.~~ Fixed in section 4 — now the minimum forward header length.
 - ~~`FLOW_TIMEOUT` is 30 seconds against CICFlowMeter's default of 120, which
   changes flow boundaries and therefore duration and all inter-arrival statistics.~~
   Fixed in `c762129` — now 120 s.
-- `Init Fwd Win Byts` defaults to 0 here; the training data uses −1 when absent.
-  **Still open.**
+- ~~`Init Fwd Win Byts` defaults to 0 here; the training data uses −1 when absent.~~
+  Fixed in section 4 — now −1 when there is no forward TCP window.
 
 `Live/validate_live_features.py` was an attempt at exactly this check and has
 since been rebuilt into a real parity report: it reads the Parquet training set,
 compares ranges per feature, and flags any feature with a large share of live
-values falling outside the training range. Two definition gaps remain above, so
-live results are still not fully validated.
+values falling outside the training range. The remaining definition gaps were
+closed in section 4 below; on a synthetic mixed TCP/UDP capture no feature now
+falls outside the training range.
+
+---
+
+## 4. Live feature-parity fixes — three CICFlowMeter definition gaps closed
+
+**Requirement:** make the `Live/` module's features match the CICFlowMeter
+definitions the models were trained on, so real-time predictions are trustworthy.
+The existing CLI capture architecture is kept as-is; only the feature definitions
+and their tests change.
+
+### What was wrong
+
+All three defects were silent — the code ran and produced predictions, but on
+features outside the range the models ever saw during training.
+
+1. **Packet / segment lengths measured the whole frame.**
+   `Live/feature_extractor.py` used `len(pkt)` — Ethernet + IP + transport
+   headers included — as the packet length feeding `TotLen Fwd/Bwd Pkts`,
+   `Subflow Fwd/Bwd Byts`, `Fwd/Bwd Pkt Len *`, `Pkt Len *`, `Pkt Size Avg` and
+   the segment-size averages. CICFlowMeter measures the **L4 payload**. The
+   training data proves it: for every class `Fwd Pkt Len Mean` equals
+   `Fwd Seg Size Avg` (CICFlowMeter defines them identically, as the mean payload
+   size), and several class means fall below 54 bytes — impossible for a whole
+   Ethernet frame. Using the frame length inflated roughly a dozen features.
+
+2. **`Fwd Seg Size Min` read the payload, not the header.**
+   It was `min(forward payload sizes)`, which is almost always `0` (a flow's
+   forward direction nearly always includes a zero-payload SYN or ACK). CICFlow-
+   Meter's `min_seg_size_forward` is the minimum forward **header** length; the
+   training range is 8–44 bytes (UDP 8; TCP 20/32/40), never 0.
+
+3. **`Init Fwd Win Byts` defaulted to `0`, not `-1`.**
+   The value was `flow.init_fwd_win_bytes or 0`, so a flow with no forward TCP
+   window (UDP, or one captured mid-stream) reported `0`. CICFlowMeter uses `-1`
+   as the sentinel — the training data's minimum and 25th percentile are both
+   `-1`. `0` is also a real, distinct TCP window size, so conflating the two lost
+   information.
+
+### What changed
+
+| File | Change |
+|---|---|
+| `Live/feature_extractor.py` | Packet length is now the transport payload (`len(tcp.payload)` / `len(udp.payload)`), used for all byte and length accumulators. Removed the redundant segment-size capture. |
+| `Live/flow.py` | Dropped the separate `forward_segment_sizes` / `backward_segment_sizes` lists — segment size equals payload length, already held by the packet-length lists. Documented the `init_fwd_win_bytes` → `-1` sentinel. |
+| `Live/feature_calculator.py` | `Fwd Seg Size Min` → minimum forward header length; `Fwd/Bwd Seg Size Avg` → mean of the payload lengths (so the CICFlowMeter identity with `Pkt Len Mean` holds); `Init Fwd Win Byts` → `-1` when no forward window was seen. |
+| `Live/test_live_pipeline.py` | Added 7 regression tests: payload-not-frame length, the `Seg Size Avg == Pkt Len Mean` identity (TCP and UDP), `Fwd Seg Size Min` as a header measure (20 TCP / 8 UDP), and `Init Fwd Win Byts` captured from the first forward packet vs. `-1` for UDP. |
+
+### Verification
+
+- `python -m pytest Live/test_live_pipeline.py` — **22 passed** (15 existing + 7 new).
+- End-to-end replay of a synthetic 280-packet mixed TCP/UDP capture through
+  `Live/sniff_test.py` classified 60 flows with the real HistGradientBoosting
+  model, then `Live/validate_live_features.py` reported **0% of live values
+  outside the training range for all 30 features** ("No feature has a suspicious
+  share of out-of-range values"). Running the pre-change code on the same capture
+  showed the old behaviour: `Fwd Seg Size Min` pinned at 0, `Fwd Pkt Len Mean`
+  and `Fwd Seg Size Avg` diverging, and header-inflated byte totals.
+- `webapp_django` predictor suite — **46 passed** — confirming the offline
+  prediction pipeline is unaffected (no Django files were touched).
+
+Not done in this pass, deliberately: wiring live capture into the Django web UI.
+That remains a follow-up now that the CLI feature pipeline is verified.
