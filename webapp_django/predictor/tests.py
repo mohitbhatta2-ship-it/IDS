@@ -499,6 +499,57 @@ class LiveCaptureSessionTests(TestCase):
         highest = max(r["seq"] for r in full["recent"])
         self.assertEqual(session.snapshot(since=highest)["recent"], [])
 
+    # -- TCP termination: classify during capture, not only on Stop --------
+
+    def test_rst_finalizes_the_flow_immediately_during_capture(self):
+        session = self._session()
+        session._handle(_pkt(ts=_BASE_TS, flags="S"))
+        # A RST from either side ends the flow at once -- no flush needed.
+        session._handle(_pkt(src="93.184.216.34", dst="10.0.0.5", sport=80, dport=51000,
+                             ts=_BASE_TS + 0.1, flags="R"))
+
+        self.assertEqual(len(session._flows), 0, "RST should remove the flow")
+        snap = session.snapshot()
+        self.assertEqual(snap["flows"], 1, "the terminated flow is classified now")
+        self.assertEqual(len(snap["recent"]), 1)
+
+    def test_two_way_fin_finalizes_the_flow_during_capture(self):
+        session = self._session()
+        session._handle(_pkt(ts=_BASE_TS, flags="S"))
+        # FIN from the forward direction: half-close, must NOT finalize yet.
+        session._handle(_pkt(ts=_BASE_TS + 0.1, flags="FA"))
+        self.assertEqual(len(session._flows), 1, "one-way FIN must not finalize")
+        self.assertEqual(session.snapshot()["flows"], 0)
+
+        # FIN from the backward direction completes the close -> finalize now.
+        session._handle(_pkt(src="93.184.216.34", dst="10.0.0.5", sport=80, dport=51000,
+                             ts=_BASE_TS + 0.2, flags="FA"))
+        self.assertEqual(len(session._flows), 0, "both-way FIN should finalize")
+        self.assertEqual(session.snapshot()["flows"], 1)
+
+    def test_single_direction_fin_does_not_finalize(self):
+        session = self._session()
+        session._handle(_pkt(ts=_BASE_TS, flags="S"))
+        # Repeated forward FINs (e.g. a retransmit) are still one direction only.
+        session._handle(_pkt(ts=_BASE_TS + 0.1, flags="FA"))
+        session._handle(_pkt(ts=_BASE_TS + 0.2, flags="FA"))
+
+        self.assertEqual(len(session._flows), 1, "a one-way FIN never finalizes")
+        self.assertEqual(session.snapshot()["flows"], 0, "nothing classified yet")
+
+    def test_udp_flows_are_not_finalized_by_termination_only_by_flush(self):
+        session = self._session()
+        session._handle(_pkt(proto="udp", sport=50000, dport=53, ts=_BASE_TS))
+        session._handle(_pkt(src="93.184.216.34", dst="10.0.0.5", proto="udp",
+                             sport=53, dport=50000, ts=_BASE_TS + 0.1))
+        # No TCP flags exist for UDP, so nothing finalizes mid-capture.
+        self.assertEqual(session.snapshot()["flows"], 0)
+        self.assertEqual(len(session._flows), 1)
+
+        # The existing timeout/flush path still classifies it on Stop.
+        session._flush_all()
+        self.assertEqual(session.snapshot()["flows"], 1)
+
 
 class LiveViewTests(TestCase):
     """The page renders and the endpoints behave without opening a real NIC."""

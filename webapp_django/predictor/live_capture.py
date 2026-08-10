@@ -105,6 +105,10 @@ class CaptureSession:
         # written by the capture thread, so every access goes through _lock.
         self._lock = threading.Lock()
         self._flows: dict = {}
+        # For each open TCP flow, the set of directions ("fwd"/"bwd") that have
+        # sent a FIN. A flow is finalized on RST, or once both directions appear
+        # here (a graceful two-way close). Keyed by the same flow key as _flows.
+        self._closing: dict = {}
         self._recent: deque = deque(maxlen=MAX_RECENT)
         self.packets = 0
         self.classified = 0
@@ -195,7 +199,7 @@ class CaptureSession:
         if IP not in pkt:
             return
 
-        flow, key = self._get_or_create_flow(pkt)
+        flow, key, forward = self._get_or_create_flow(pkt)
         if flow is None:
             return
 
@@ -206,6 +210,14 @@ class CaptureSession:
 
         with self._lock:
             self.packets += 1
+
+        # TCP termination: finalize the flow the moment the connection closes,
+        # rather than waiting out the 120 s idle timeout. This is what makes
+        # predictions appear during capture for ordinary (short-lived) TCP flows.
+        if self._is_terminated(pkt, key, forward):
+            self._finalize(key)
+            # A terminated flow needs no further timeout handling.
+            return
 
         now = float(pkt.time)
         if self._last_cleanup is None:
@@ -221,6 +233,12 @@ class CaptureSession:
         return (src_ip, dst_ip, src_port, dst_port, proto)
 
     def _get_or_create_flow(self, pkt):
+        """
+        Return ``(flow, key, forward)`` where ``key`` is the flow's stored key and
+        ``forward`` is True when this packet travels in the flow's original
+        (source->destination) direction. Returns ``(None, None, None)`` for
+        anything that is not TCP or UDP.
+        """
         from flow import Flow
         from scapy.layers.inet import IP
 
@@ -231,20 +249,21 @@ class CaptureSession:
         elif proto == 17:
             transport = pkt["UDP"]
         else:
-            return None, None
+            return None, None, None
 
         forward_key = self._make_key(ip.src, ip.dst, transport.sport, transport.dport, proto)
         reverse_key = self._make_key(ip.dst, ip.src, transport.dport, transport.sport, proto)
 
         with self._lock:
             if forward_key in self._flows:
-                return self._flows[forward_key], forward_key
+                return self._flows[forward_key], forward_key, True
             if reverse_key in self._flows:
-                return self._flows[reverse_key], reverse_key
+                return self._flows[reverse_key], reverse_key, False
 
             if len(self._flows) >= MAX_FLOWS:
                 oldest = min(self._flows, key=lambda k: self._flows[k].last_seen or 0)
-                del self._flows[oldest]
+                self._flows.pop(oldest, None)
+                self._closing.pop(oldest, None)
 
             flow = Flow(
                 src_ip=ip.src,
@@ -254,7 +273,46 @@ class CaptureSession:
                 protocol=proto,
             )
             self._flows[forward_key] = flow
-            return flow, forward_key
+            return flow, forward_key, True
+
+    # -- TCP termination ---------------------------------------------------
+
+    def _is_terminated(self, pkt, key, forward: bool) -> bool:
+        """
+        Decide whether this packet closes its TCP flow.
+
+        RST closes it at once. FIN closes it only once *both* directions have
+        sent one -- a single one-way FIN is a half-close and must not finalize
+        the flow, exactly as required. UDP and everything else never terminate
+        here and are left to the 120 s idle timeout.
+        """
+        from scapy.layers.inet import TCP
+
+        if TCP not in pkt:
+            return False
+
+        flags = pkt[TCP].flags
+
+        if flags.R:
+            self._closing.pop(key, None)
+            return True
+
+        if flags.F:
+            seen = self._closing.setdefault(key, set())
+            seen.add("fwd" if forward else "bwd")
+            if {"fwd", "bwd"} <= seen:
+                self._closing.pop(key, None)
+                return True
+
+        return False
+
+    def _finalize(self, key) -> None:
+        """Classify and remove a single flow now (TCP termination path)."""
+        with self._lock:
+            flow = self._flows.pop(key, None)
+            self._closing.pop(key, None)
+        if flow is not None:
+            self._classify(flow)
 
     def _sweep(self, now: float) -> None:
         """Expire and classify every flow idle longer than the timeout."""
@@ -265,6 +323,8 @@ class CaptureSession:
                 if flow.last_seen is not None and (now - float(flow.last_seen)) > FLOW_TIMEOUT
             ]
             flows = [self._flows.pop(key) for key in expired]
+            for key in expired:
+                self._closing.pop(key, None)
 
         for flow in flows:
             self._classify(flow)
@@ -273,6 +333,7 @@ class CaptureSession:
         with self._lock:
             flows = list(self._flows.values())
             self._flows.clear()
+            self._closing.clear()
         for flow in flows:
             self._classify(flow)
 
