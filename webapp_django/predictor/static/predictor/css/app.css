@@ -1237,3 +1237,24 @@ a.lp-use:hover .lp-use-go { text-decoration: underline; text-underline-offset: 3
 .confirm-text strong { display: block; color: var(--ink); font-size: .9rem; margin-bottom: .1rem; }
 
 .btn-danger { background: var(--critical); color: #fff; border-color: var(--critical); }
+
+/* ------------------------------------------------------------- live capture */
+.live-status { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+
+/* The recording indicator: a steady dot that pulses only while capturing. */
+#live-state.is-recording { color: var(--critical); }
+#live-state.is-recording .dot { animation: live-pulse 1.15s ease-in-out infinite; }
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: .35; transform: scale(1.55); }
+}
+@media (prefers-reduced-motion: reduce) {
+  #live-state.is-recording .dot { animation: none; }
+}
+
+.live-dot {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--fam); margin-right: .45rem; vertical-align: middle; flex: none;
+}
+.live-verdict { color: var(--ink); font-weight: 600; }
+tr.is-attack-row td { background: color-mix(in srgb, var(--critical) 5%, transparent); }

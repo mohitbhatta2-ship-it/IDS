@@ -1,0 +1,136 @@
+{% extends "predictor/base.html" %}
+{% load static asset_tags %}
+{% block title %}Live{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <h1>Live traffic capture</h1>
+  <p>
+    Capture packets off a network interface, assemble them into flows, and classify each finished
+    flow with the same trained models used on the Single-flow and Dataset pages. Features are
+    extracted by the verified <code>Live/</code> pipeline and scored through the identical
+    preprocessing and prediction path — nothing here re-implements the model logic.
+  </p>
+</div>
+
+<div class="layout">
+  <div class="card">
+    <div class="card-head">
+      <h2>Capture</h2>
+      <p>Select a model and interface, then start.</p>
+    </div>
+    <div class="card-body">
+      {% if not capture_supported %}
+        <div class="notice is-info" style="margin-bottom: 1rem;">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/>
+          </svg>
+          <span>
+            Live capture is unavailable in this environment (Scapy could not be loaded). The rest
+            of the app works normally; deploy on a host with Scapy and packet-capture privileges to
+            use this page.
+          </span>
+        </div>
+      {% endif %}
+
+      <div id="live-error" class="notice is-error" hidden style="margin-bottom: 1rem;">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/>
+        </svg>
+        <span data-error-text></span>
+      </div>
+
+      <div class="field" style="max-width: 360px;">
+        <label for="live-model">Model</label>
+        <select name="model_key" id="live-model">
+          {% for m in models %}
+            <option value="{{ m.key }}" {% if m.key == default_model %}selected{% endif %}>
+              {{ m.name }} — macro F1 {{ m.macro_f1|floatformat:4 }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="field" style="max-width: 360px; margin-top: 1rem;">
+        <label for="live-iface">Interface</label>
+        <select name="iface" id="live-iface">
+          <option value="auto">Auto (Scapy default)</option>
+          {% for iface in interfaces %}
+            <option value="{{ iface }}">{{ iface }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div style="margin-top: 1.25rem; display: flex; gap: .6rem; flex-wrap: wrap;">
+        <button type="button" id="live-start" class="btn" {% if not capture_supported %}disabled{% endif %}>
+          Start capture
+        </button>
+        <button type="button" id="live-stop" class="btn btn-ghost" disabled>Stop</button>
+      </div>
+
+      <div class="live-status" style="margin-top: 1.5rem;">
+        <span class="pill" id="live-state"><span class="dot"></span><span data-state-text>Idle</span></span>
+        <span class="pill"><span data-metric="packets">0</span>&nbsp;packets</span>
+        <span class="pill"><span data-metric="flows">0</span>&nbsp;flows</span>
+        <span class="pill is-attack"><span data-metric="attacks">0</span>&nbsp;attacks</span>
+        <span class="pill"><span data-metric="open">0</span>&nbsp;open</span>
+      </div>
+    </div>
+  </div>
+
+  <aside>
+    <div class="card">
+      <div class="card-head">
+        <h2>Attack families</h2>
+      </div>
+      <div class="card-body">
+        <div class="legend">
+          {% for f in families %}
+            <span class="legend-item fam-{{ f.key }}">
+              <span class="swatch"></span>
+              {{ f.name }}
+            </span>
+          {% endfor %}
+        </div>
+        <p class="table-note">
+          Capturing needs the server to run with packet-capture privileges (root / CAP_NET_RAW).
+          Results here are live only — they are not written to the History log.
+        </p>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<div class="card" style="margin-top: 1.5rem;">
+  <div class="card-head">
+    <h2>Classified flows</h2>
+    <p>Newest first · most recent 200 flows</p>
+  </div>
+  <div class="card-body">
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Source</th>
+            <th>Destination</th>
+            <th>Proto</th>
+            <th class="num">Pkts</th>
+            <th>Prediction</th>
+            <th class="num">Confidence</th>
+          </tr>
+        </thead>
+        <tbody id="live-tbody">
+          <tr id="live-empty"><td colspan="7" style="text-align:center; color: var(--ink-muted); padding: 2rem;">
+            No flows classified yet. Start a capture to see traffic here.
+          </td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static_v 'predictor/js/live.js' %}"></script>
+{% endblock %}

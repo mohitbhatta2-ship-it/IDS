@@ -7,8 +7,10 @@ Run with:
 
 import csv
 import io
+import json
 import tempfile
 from pathlib import Path
+from unittest import skipUnless
 
 import pandas as pd
 from django.test import TestCase, override_settings
@@ -394,3 +396,167 @@ class HistoryViewTests(TestCase):
         history_log.record(kind=history_log.MANUAL, model_name="MLP", predicted_label="Bot")
         self.assertEqual(self.client.get("/history/clear/").status_code, 405)
         self.assertEqual(history_log.count(), 1)
+
+
+# ---------------------------------------------------------------------------
+# Live capture — the web integration of the Live/ pipeline
+# ---------------------------------------------------------------------------
+
+import sys as _sys
+from unittest import mock
+
+from . import live_capture
+
+try:
+    from scapy.layers.inet import IP, TCP, UDP
+    from scapy.packet import Raw
+
+    _SCAPY = True
+except Exception:  # noqa: BLE001
+    _SCAPY = False
+
+# 2018-era timestamps, deliberately far from "now", so any code reaching for the
+# wall clock instead of the packet clock shows up immediately (mirrors the Live
+# suite's convention).
+_BASE_TS = 1_530_000_000.0
+
+
+def _pkt(src="10.0.0.5", dst="93.184.216.34", sport=51000, dport=80,
+         ts=_BASE_TS, payload=100, flags="PA", proto="tcp"):
+    if proto == "tcp":
+        p = IP(src=src, dst=dst) / TCP(sport=sport, dport=dport, flags=flags) / Raw(b"x" * payload)
+    else:
+        p = IP(src=src, dst=dst) / UDP(sport=sport, dport=dport) / Raw(b"x" * payload)
+    p.time = ts
+    return p
+
+
+@skipUnless(_SCAPY, "scapy is required for live-capture tests")
+class LiveCaptureSessionTests(TestCase):
+    """The capture session reuses the Live/ extractor and ml.predict_one."""
+
+    def setUp(self):
+        # The session's packet handler imports Live/ modules by name.
+        live_capture._ensure_live_on_path()
+
+    def _session(self, model_key=None):
+        return live_capture.CaptureSession(interface=None, model_key=model_key or ml.DEFAULT_MODEL)
+
+    def test_a_flow_fed_packets_is_classified_with_all_the_expected_fields(self):
+        session = self._session()
+        session._handle(_pkt(ts=_BASE_TS, payload=120))
+        session._handle(_pkt(src="93.184.216.34", dst="10.0.0.5", sport=80, dport=51000,
+                             ts=_BASE_TS + 0.1, payload=200))
+        session._flush_all()
+
+        snap = session.snapshot()
+        self.assertEqual(snap["flows"], 1)
+        self.assertEqual(len(snap["recent"]), 1)
+
+        rec = snap["recent"][0]
+        for key in ("src_ip", "dst_ip", "src_port", "dst_port", "protocol",
+                    "label", "confidence", "is_attack", "at", "packets", "seq"):
+            self.assertIn(key, rec)
+        self.assertEqual(rec["protocol"], "TCP")
+        self.assertEqual(rec["src_ip"], "10.0.0.5")
+        self.assertEqual(rec["dst_port"], 80)
+        self.assertEqual(rec["packets"], 2)
+        self.assertIn(rec["label"], set(ml.LABELS.values()))
+        self.assertGreaterEqual(rec["confidence"], 0.0)
+        self.assertLessEqual(rec["confidence"], 1.0)
+
+    def test_the_reverse_direction_joins_one_flow(self):
+        session = self._session()
+        session._handle(_pkt(ts=_BASE_TS))
+        session._handle(_pkt(src="93.184.216.34", dst="10.0.0.5", sport=80, dport=51000,
+                             ts=_BASE_TS + 0.1))
+        self.assertEqual(len(session._flows), 1)
+
+    def test_non_tcp_udp_traffic_is_ignored(self):
+        session = self._session()
+        icmp = IP(src="10.0.0.5", dst="8.8.8.8", proto=1)
+        icmp.time = _BASE_TS
+        session._handle(icmp)
+        self.assertEqual(len(session._flows), 0)
+
+    def test_classification_routes_through_predict_one_with_the_chosen_model(self):
+        session = self._session(model_key="xgboost")
+        with mock.patch.object(live_capture.ml, "predict_one",
+                               wraps=live_capture.ml.predict_one) as spy:
+            session._handle(_pkt(ts=_BASE_TS))
+            session._flush_all()
+        self.assertTrue(spy.called)
+        # The model_key selected in the UI is the one handed to the pipeline.
+        self.assertEqual(spy.call_args.args[1], "xgboost")
+
+    def test_snapshot_since_returns_only_newer_records(self):
+        session = self._session()
+        session._handle(_pkt(sport=51000, ts=_BASE_TS))
+        session._handle(_pkt(sport=52000, ts=_BASE_TS + 1))
+        session._flush_all()
+
+        full = session.snapshot()
+        highest = max(r["seq"] for r in full["recent"])
+        self.assertEqual(session.snapshot(since=highest)["recent"], [])
+
+
+class LiveViewTests(TestCase):
+    """The page renders and the endpoints behave without opening a real NIC."""
+
+    def test_the_live_page_renders_with_the_model_options(self):
+        response = self.client.get("/live/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Live traffic capture")
+        self.assertContains(response, 'id="live-model"')
+        self.assertContains(response, "Auto (Scapy default)")
+
+    def test_status_with_no_session_reports_not_running(self):
+        # Ensure a clean manager for this assertion.
+        live_capture.manager._session = None
+        data = self.client.get("/live/status/").json()
+        self.assertFalse(data["running"])
+        self.assertEqual(data["recent"], [])
+
+    def test_start_rejects_an_unknown_model(self):
+        response = self.client.post(
+            "/live/start/", data={"model_key": "not-a-model", "iface": "auto"},
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("error", response.json())
+
+    def test_start_surfaces_a_capture_error_as_503(self):
+        with mock.patch.object(live_capture.manager, "start",
+                               side_effect=live_capture.CaptureError("no scapy here")):
+            response = self.client.post(
+                "/live/start/",
+                data=json.dumps({"model_key": ml.DEFAULT_MODEL, "iface": "auto"}),
+                content_type="application/json",
+            )
+        self.assertEqual(response.status_code, 503)
+        self.assertIn("no scapy here", response.json()["error"])
+
+    def test_start_status_stop_cycle_without_real_sniffing(self):
+        """Patch the capture thread body so no interface is opened."""
+        self.addCleanup(setattr, live_capture.manager, "_session", None)
+        with mock.patch.object(live_capture.CaptureSession, "_run", lambda self: None), \
+                mock.patch.object(live_capture, "_ensure_live_on_path", return_value=None), \
+                mock.patch("scapy.all.sniff", create=True):
+            started = self.client.post(
+                "/live/start/",
+                data=json.dumps({"model_key": ml.DEFAULT_MODEL, "iface": "auto"}),
+                content_type="application/json",
+            )
+            self.assertEqual(started.status_code, 200)
+            self.assertIn("running", started.json())
+
+            status = self.client.get("/live/status/")
+            self.assertEqual(status.status_code, 200)
+
+            stopped = self.client.post("/live/stop/")
+            self.assertEqual(stopped.status_code, 200)
+            self.assertFalse(stopped.json()["running"])
+
+    def test_stop_with_no_session_is_harmless(self):
+        live_capture.manager._session = None
+        data = self.client.post("/live/stop/").json()
+        self.assertFalse(data["running"])

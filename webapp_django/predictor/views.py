@@ -6,7 +6,7 @@ from django.shortcuts import redirect, render
 from django.utils.timezone import localtime
 from django.views.decorators.http import require_http_methods
 
-from . import classes, history_log, ml
+from . import classes, history_log, live_capture, ml
 from .forms import BatchUploadForm, ManualFlowForm
 
 
@@ -191,6 +191,93 @@ def batch(request):
         }
     )
     return render(request, "predictor/batch_result.html", context)
+
+
+# ---------------------------------------------------------------------------
+# Live capture — classify real traffic off a network interface
+# ---------------------------------------------------------------------------
+
+
+def live(request):
+    """
+    The live-capture console. Renders even where capture is impossible (no
+    scapy, no privileges): the page then shows the interfaces it could find and
+    reports any failure inline when Start is pressed, so the rest of the app is
+    never affected.
+    """
+    context = _base_context("live")
+    context.update(
+        {
+            "interfaces": live_capture.list_interfaces(),
+            "capture_supported": live_capture.capture_supported(),
+            "families": classes.legend(),
+        }
+    )
+    return render(request, "predictor/live.html", context)
+
+
+def _resolve_model_key(raw: str | None) -> str:
+    """Same rule as the forms: fall back to the default, reject anything unknown."""
+    key = (raw or "").strip() or ml.DEFAULT_MODEL
+    if key not in ml.MODEL_REGISTRY:
+        raise ValueError("Unknown model.")
+    return key
+
+
+@require_http_methods(["POST"])
+def api_live_start(request):
+    """Start a capture. Body: JSON or form with `iface` and `model_key`."""
+    if request.content_type == "application/json":
+        try:
+            payload = json.loads(request.body or "{}")
+        except json.JSONDecodeError:
+            return JsonResponse({"error": "Malformed JSON."}, status=400)
+    else:
+        payload = request.POST.dict()
+
+    # "auto" (or blank) means "let scapy choose the interface".
+    iface = (payload.get("iface") or "").strip()
+    if iface.lower() in ("", "auto"):
+        iface = None
+
+    try:
+        model_key = _resolve_model_key(payload.get("model_key"))
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+    try:
+        session = live_capture.manager.start(iface, model_key)
+    except live_capture.CaptureError as exc:
+        return JsonResponse({"error": str(exc)}, status=503)
+
+    return JsonResponse(session.snapshot())
+
+
+@require_http_methods(["POST"])
+def api_live_stop(request):
+    """Stop the running capture, if any, and return its final snapshot."""
+    session = live_capture.manager.stop()
+    if session is None:
+        return JsonResponse({"running": False, "recent": []})
+    return JsonResponse(session.snapshot())
+
+
+@require_http_methods(["GET"])
+def api_live_status(request):
+    """
+    Poll endpoint. `?since=<seq>` returns only records newer than the client's
+    highest seen sequence number, so the table can append rather than reload.
+    """
+    session = live_capture.manager.session
+    if session is None:
+        return JsonResponse({"running": False, "recent": []})
+
+    try:
+        since = int(request.GET.get("since", "0"))
+    except (TypeError, ValueError):
+        since = 0
+
+    return JsonResponse(session.snapshot(since=since))
 
 
 # ---------------------------------------------------------------------------

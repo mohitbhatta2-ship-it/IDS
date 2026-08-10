@@ -45,6 +45,7 @@
         <a href="{% url 'home' %}" {% if active == 'home' %}class="is-active" aria-current="page"{% endif %}>Overview</a>
         <a href="{% url 'manual' %}" {% if active == 'manual' %}class="is-active" aria-current="page"{% endif %}>Single flow</a>
         <a href="{% url 'batch' %}" {% if active == 'batch' %}class="is-active" aria-current="page"{% endif %}>Dataset</a>
+        <a href="{% url 'live' %}" {% if active == 'live' %}class="is-active" aria-current="page"{% endif %}>Live</a>
         <a href="{% url 'history' %}" {% if active == 'history' %}class="is-active" aria-current="page"{% endif %}>History</a>
       </nav>
 
