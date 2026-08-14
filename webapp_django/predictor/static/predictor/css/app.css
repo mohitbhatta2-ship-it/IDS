@@ -74,6 +74,10 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 
+/* A component's display (e.g. .notice { display:flex }) otherwise overrides the
+   `hidden` attribute, leaving hidden panels rendering as empty bars. */
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   font-family: var(--font);
@@ -526,631 +530,6 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .tile.by-family { border-left: 3px solid var(--fam); }
 .tile.by-family .v { color: var(--fam); }
 
-/* ==========================================================================
-   Visual layer — depth, motion, glow.
-   Semantics are untouched: family hue still carries meaning and every mark
-   keeps its text label. This is only about making it feel built.
-   ========================================================================== */
-
-:root {
-  --ease: cubic-bezier(.22, 1, .36, 1);
-  --glass: rgba(252, 252, 251, .72);
-  --glass-line: rgba(11, 11, 11, .07);
-  --mesh-1: rgba(42, 120, 214, .10);
-  --mesh-2: rgba(74, 58, 167, .08);
-  --mesh-3: rgba(12, 163, 12, .06);
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --glass: rgba(26, 26, 25, .68);
-    --glass-line: rgba(255, 255, 255, .08);
-    --mesh-1: rgba(57, 135, 229, .16);
-    --mesh-2: rgba(144, 133, 233, .12);
-    --mesh-3: rgba(12, 163, 12, .08);
-  }
-}
-:root[data-theme="dark"] {
-  --glass: rgba(26, 26, 25, .68);
-  --glass-line: rgba(255, 255, 255, .08);
-  --mesh-1: rgba(57, 135, 229, .16);
-  --mesh-2: rgba(144, 133, 233, .12);
-  --mesh-3: rgba(12, 163, 12, .08);
-}
-
-/* Ambient mesh behind everything */
-body::before {
-  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
-  background:
-    radial-gradient(50rem 34rem at 12% -8%,  var(--mesh-1), transparent 60%),
-    radial-gradient(44rem 30rem at 88% 4%,   var(--mesh-2), transparent 62%),
-    radial-gradient(40rem 28rem at 52% 108%, var(--mesh-3), transparent 60%);
-}
-
-/* Glass cards with a lift on hover */
-.card {
-  background: var(--glass);
-  backdrop-filter: blur(18px) saturate(1.35);
-  -webkit-backdrop-filter: blur(18px) saturate(1.35);
-  border-color: var(--glass-line);
-  transition: transform .3s var(--ease), box-shadow .3s var(--ease);
-}
-.card:hover { box-shadow: 0 2px 4px rgba(11,11,11,.05), 0 18px 44px rgba(11,11,11,.09); }
-
-.topbar {
-  background: color-mix(in srgb, var(--surface) 78%, transparent);
-  backdrop-filter: blur(16px) saturate(1.3);
-  -webkit-backdrop-filter: blur(16px) saturate(1.3);
-}
-
-/* Brand mark gets dimension */
-.brand-mark {
-  background: linear-gradient(140deg, #4f9bff, var(--series-1) 55%, #2a5fb0);
-  box-shadow: 0 3px 10px color-mix(in srgb, var(--series-1) 40%, transparent),
-              inset 0 1px 0 rgba(255,255,255,.28);
-}
-
-/* ---------- Page header ---------- */
-
-.page-head { padding: 2.6rem 0 1.6rem; }
-.page-head h1 {
-  font-size: clamp(1.6rem, 3.1vw, 2.15rem); font-weight: 700; letter-spacing: -.028em;
-  background: linear-gradient(180deg, var(--ink) 30%, color-mix(in srgb, var(--ink) 62%, transparent));
-  -webkit-background-clip: text; background-clip: text; color: transparent;
-}
-
-/* ---------- Stat tiles ---------- */
-
-.tile {
-  position: relative; overflow: hidden;
-  background: linear-gradient(160deg,
-    color-mix(in srgb, var(--surface) 92%, transparent),
-    var(--surface-sunk));
-  transition: transform .25s var(--ease), border-color .25s var(--ease);
-}
-.tile:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--ink) 16%, transparent); }
-.tile .v { font-size: 1.85rem; letter-spacing: -.03em; }
-.tile::after {
-  content: ""; position: absolute; right: -28px; top: -28px;
-  width: 84px; height: 84px; border-radius: 50%;
-  background: radial-gradient(circle, color-mix(in srgb, var(--series-1) 13%, transparent), transparent 70%);
-}
-.tile.accent-critical::after { background: radial-gradient(circle, color-mix(in srgb, var(--critical) 17%, transparent), transparent 70%); }
-.tile.accent-good::after     { background: radial-gradient(circle, color-mix(in srgb, var(--good) 17%, transparent), transparent 70%); }
-
-/* ---------- Verdict hero ---------- */
-
-.verdict-hero {
-  padding: 1.55rem 1.5rem;
-  background:
-    radial-gradient(24rem 12rem at 88% -30%, color-mix(in srgb, var(--fam) 30%, transparent), transparent 70%),
-    linear-gradient(135deg,
-      color-mix(in srgb, var(--fam) 17%, transparent) 0%,
-      color-mix(in srgb, var(--fam) 5%, transparent) 58%,
-      transparent 100%),
-    var(--surface-sunk);
-  box-shadow: 0 12px 34px -14px color-mix(in srgb, var(--fam) 48%, transparent),
-              inset 0 1px 0 color-mix(in srgb, #fff 9%, transparent);
-  animation: heroIn .5s var(--ease) both;
-}
-.verdict-hero::before { width: 5px; box-shadow: 0 0 18px 1px color-mix(in srgb, var(--fam) 65%, transparent); }
-.verdict-class { font-size: 1.45rem; }
-
-@keyframes heroIn {
-  from { opacity: 0; transform: translateY(10px) scale(.985); }
-  to   { opacity: 1; transform: none; }
-}
-
-.fam-chip {
-  backdrop-filter: blur(6px);
-  box-shadow: 0 1px 6px color-mix(in srgb, var(--fam) 24%, transparent);
-}
-.fam-chip .swatch { box-shadow: 0 0 7px color-mix(in srgb, var(--fam) 85%, transparent); }
-
-/* ---------- Confidence ring ---------- */
-
-.ring {
-  width: 116px; height: 116px;
-  /* The arc gradient's stops are currentColor, so the family hue has to reach
-     it through `color` -- setting only --fam leaves the ring rendering in the
-     inherited text colour. */
-  color: var(--fam);
-}
-.ring svg { filter: drop-shadow(0 0 9px color-mix(in srgb, var(--fam) 42%, transparent)); }
-.ring .value { stroke: url(#ringGrad); }
-.ring-label .n { font-size: 1.5rem; }
-.ring-wrap { animation: fadeUp .5s .1s var(--ease) both; }
-
-@keyframes fadeUp {
-  from { opacity: 0; transform: translateY(9px); }
-  to   { opacity: 1; transform: none; }
-}
-
-/* ---------- Bars ---------- */
-
-.bars { animation: fadeUp .5s .18s var(--ease) both; }
-.bar-track {
-  height: 10px;
-  background: color-mix(in srgb, var(--ink) 6%, transparent);
-  border-color: transparent;
-}
-.bar-fill.by-family {
-  background: linear-gradient(90deg,
-    color-mix(in srgb, var(--fam) 72%, transparent), var(--fam));
-  box-shadow: 0 0 12px -1px color-mix(in srgb, var(--fam) 58%, transparent);
-}
-.bar-row.is-top .bar-fill, .bar-row.is-attack .bar-fill, .bar-row.is-benign .bar-fill {
-  box-shadow: 0 0 12px -1px color-mix(in srgb, currentColor 45%, transparent);
-}
-.bar-dot { box-shadow: 0 0 7px color-mix(in srgb, var(--fam) 80%, transparent); }
-
-/* ---------- Composition bar ---------- */
-
-.composition { height: 40px; border: 0; padding: 0; background: transparent; }
-.composition span {
-  background: linear-gradient(180deg,
-    color-mix(in srgb, var(--fam) 88%, #fff 12%), var(--fam));
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.2),
-              0 5px 16px -7px color-mix(in srgb, var(--fam) 75%, transparent);
-  transition: transform .22s var(--ease), filter .22s var(--ease);
-  animation: growX .65s var(--ease) both;
-  transform-origin: left center;
-}
-.composition span:hover { transform: scaleY(1.14); filter: brightness(1.12); z-index: 2; }
-
-@keyframes growX { from { transform: scaleX(0); } to { transform: none; } }
-
-.legend-item { transition: transform .2s var(--ease), border-color .2s var(--ease); }
-.legend-item:hover {
-  transform: translateY(-1px);
-  border-color: color-mix(in srgb, var(--fam) 50%, transparent);
-}
-.legend-item .swatch { box-shadow: 0 0 8px color-mix(in srgb, var(--fam) 70%, transparent); }
-
-/* ---------- Family cards ---------- */
-
-.family-card {
-  border-left-width: 4px;
-  transition: transform .25s var(--ease), box-shadow .25s var(--ease);
-  background: linear-gradient(135deg,
-    color-mix(in srgb, var(--fam) 8%, transparent), var(--surface-sunk) 60%);
-}
-.family-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 14px 30px -16px color-mix(in srgb, var(--fam) 70%, transparent);
-}
-.family-card h4 .swatch { box-shadow: 0 0 8px color-mix(in srgb, var(--fam) 75%, transparent); }
-
-/* ---------- Buttons ---------- */
-
-.btn {
-  background: linear-gradient(140deg, #5aa2ff, var(--series-1) 58%, #2560b5);
-  box-shadow: 0 4px 14px -4px color-mix(in srgb, var(--series-1) 62%, transparent),
-              inset 0 1px 0 rgba(255,255,255,.24);
-  transition: transform .18s var(--ease), box-shadow .18s var(--ease), filter .18s;
-}
-.btn:hover { transform: translateY(-1px); box-shadow: 0 8px 22px -6px color-mix(in srgb, var(--series-1) 70%, transparent), inset 0 1px 0 rgba(255,255,255,.24); }
-.btn:active { transform: translateY(0); }
-.btn-ghost { background: var(--surface); box-shadow: none; }
-.btn-ghost:hover { box-shadow: none; transform: translateY(-1px); }
-
-/* ---------- Inputs ---------- */
-
-input[type="number"], select {
-  transition: border-color .18s, box-shadow .18s, background .18s;
-}
-input[type="number"]:hover, select:hover { border-color: color-mix(in srgb, var(--series-1) 45%, var(--line-strong)); }
-input[type="number"]:focus {
-  border-color: var(--series-1);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--series-1) 18%, transparent);
-}
-.field.filled input[type="number"] { background: color-mix(in srgb, var(--series-1) 5%, var(--surface)); }
-
-/* ---------- Dropzone ---------- */
-
-.dropzone { transition: border-color .2s, background .2s, transform .2s var(--ease); }
-.dropzone:hover, .dropzone.is-over {
-  transform: translateY(-2px);
-  background: color-mix(in srgb, var(--series-1) 6%, var(--surface-sunk));
-  box-shadow: 0 14px 34px -20px color-mix(in srgb, var(--series-1) 80%, transparent);
-}
-
-/* ---------- Tables ---------- */
-
-tbody tr { transition: background .15s; }
-tbody tr:hover { background: color-mix(in srgb, var(--ink) 3.5%, transparent); }
-
-/* ---------- Staggered card entrance ---------- */
-
-.card { animation: fadeUp .5s var(--ease) both; }
-.card:nth-of-type(2) { animation-delay: .05s; }
-.card:nth-of-type(3) { animation-delay: .1s; }
-.tiles .tile { animation: fadeUp .45s var(--ease) both; }
-.tiles .tile:nth-child(2) { animation-delay: .04s; }
-.tiles .tile:nth-child(3) { animation-delay: .08s; }
-.tiles .tile:nth-child(4) { animation-delay: .12s; }
-.tiles .tile:nth-child(5) { animation-delay: .16s; }
-.tiles .tile:nth-child(6) { animation-delay: .2s; }
-
-@media (prefers-reduced-motion: reduce) {
-  body::before { display: none; }
-  .card, .tile, .verdict-hero, .ring-wrap, .bars, .composition span { animation: none !important; }
-}
-
-/* ==========================================================================
-   Ambient backdrop
-   A slow drifting aurora over a faint network grid. Deliberately cool-toned
-   (blue/violet/teal) so it never competes with the warm attack-family hues —
-   red and orange still read as the loudest things on screen.
-   ========================================================================== */
-
-:root {
-  --page: #f6f7fb;                 /* was flat #f9f9f7 — a touch cooler */
-  --orb-a: rgba(42, 120, 214, .30);
-  --orb-b: rgba(74, 58, 167, .22);
-  --orb-c: rgba(27, 175, 122, .18);
-  --grid-line: rgba(11, 11, 11, .05);
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --page: #07080d;               /* deep blue-black rather than neutral */
-    --orb-a: rgba(57, 135, 229, .30);
-    --orb-b: rgba(144, 133, 233, .22);
-    --orb-c: rgba(25, 158, 112, .16);
-    --grid-line: rgba(255, 255, 255, .045);
-  }
-}
-:root[data-theme="dark"] {
-  --page: #07080d;
-  --orb-a: rgba(57, 135, 229, .30);
-  --orb-b: rgba(144, 133, 233, .22);
-  --orb-c: rgba(25, 158, 112, .16);
-  --grid-line: rgba(255, 255, 255, .045);
-}
-
-/* The old flat mesh is replaced by the layered backdrop below. */
-body::before { content: none; }
-
-.bg {
-  position: fixed; inset: 0; z-index: -1;
-  overflow: hidden; pointer-events: none;
-}
-
-/* Network grid — thematically apt, and it gives the blur something to sit on.
-   Masked so it fades out toward the edges instead of stopping abruptly. */
-.bg-grid {
-  position: absolute; inset: -2px;
-  background-image:
-    linear-gradient(var(--grid-line) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
-  background-size: 46px 46px;
-  mask-image: radial-gradient(120% 95% at 50% 0%, #000 35%, transparent 78%);
-  -webkit-mask-image: radial-gradient(120% 95% at 50% 0%, #000 35%, transparent 78%);
-}
-
-.bg-orb {
-  position: absolute; border-radius: 50%;
-  filter: blur(90px);
-  will-change: transform;
-}
-.orb-1 {
-  width: 46rem; height: 34rem; top: -14rem; left: -10rem;
-  background: var(--orb-a);
-  animation: drift1 34s ease-in-out infinite alternate;
-}
-.orb-2 {
-  width: 40rem; height: 30rem; top: -6rem; right: -12rem;
-  background: var(--orb-b);
-  animation: drift2 42s ease-in-out infinite alternate;
-}
-.orb-3 {
-  width: 38rem; height: 28rem; bottom: -16rem; left: 30%;
-  background: var(--orb-c);
-  animation: drift3 50s ease-in-out infinite alternate;
-}
-
-@keyframes drift1 {
-  from { transform: translate3d(0, 0, 0) scale(1); }
-  to   { transform: translate3d(7rem, 4rem, 0) scale(1.12); }
-}
-@keyframes drift2 {
-  from { transform: translate3d(0, 0, 0) scale(1.06); }
-  to   { transform: translate3d(-6rem, 6rem, 0) scale(1); }
-}
-@keyframes drift3 {
-  from { transform: translate3d(0, 0, 0) scale(1); }
-  to   { transform: translate3d(-8rem, -5rem, 0) scale(1.15); }
-}
-
-/* A single slow sweep across the top — a nod to a radar/monitoring display,
-   kept faint enough that it reads as light rather than as a moving object. */
-.bg-scan {
-  position: absolute; inset: 0;
-  background: linear-gradient(100deg,
-    transparent 42%,
-    color-mix(in srgb, var(--series-1) 8%, transparent) 50%,
-    transparent 58%);
-  background-size: 260% 100%;
-  animation: sweep 14s linear infinite;
-}
-@keyframes sweep {
-  from { background-position: 130% 0; }
-  to   { background-position: -130% 0; }
-}
-
-/* Give the sticky bar a hairline of light so it separates from the backdrop */
-.topbar { border-bottom-color: color-mix(in srgb, var(--ink) 10%, transparent); }
-
-@media (prefers-reduced-motion: reduce) {
-  .bg-orb, .bg-scan { animation: none !important; }
-}
-
-/* ==========================================================================
-   Landing page
-   Everything here is prefixed .lp- and used only by home.html, so the tool
-   pages are untouched. It leans on the tokens already defined above -- the
-   family hues, the glass surfaces and the ambient backdrop -- rather than
-   introducing a second look for the same product.
-   ========================================================================== */
-
-/* ---------- Hero ---------- */
-
-.lp-hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1.02fr) minmax(0, .98fr);
-  gap: 2.5rem;
-  align-items: center;
-  padding: 3.6rem 0 3rem;
-}
-@media (max-width: 960px) {
-  .lp-hero { grid-template-columns: minmax(0, 1fr); gap: 1.75rem; padding: 2.4rem 0 2rem; }
-  .lp-visual { max-width: 420px; margin-inline: auto; }
-}
-
-.lp-badge {
-  display: inline-flex; align-items: center; gap: .5rem;
-  padding: .3rem .75rem .3rem .6rem; border-radius: 999px;
-  font-size: .705rem; font-weight: 650; letter-spacing: .07em; text-transform: uppercase;
-  color: var(--ink-2);
-  background: color-mix(in srgb, var(--surface) 66%, transparent);
-  border: 1px solid var(--glass-line);
-  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-}
-.lp-badge-dot {
-  width: 7px; height: 7px; border-radius: 50%; flex: none;
-  background: var(--good); box-shadow: 0 0 8px var(--good);
-  animation: lpBlink 2.6s ease-in-out infinite;
-}
-@keyframes lpBlink { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
-
-.lp-hero h1 {
-  font-size: clamp(2.1rem, 5vw, 3.35rem);
-  font-weight: 720; letter-spacing: -.035em; line-height: 1.07;
-  margin: 1.1rem 0 0;
-}
-.lp-hero h1 em {
-  font-style: normal;
-  background: linear-gradient(100deg, var(--series-1) 0%, #7c6cf0 52%, var(--family-benign) 100%);
-  -webkit-background-clip: text; background-clip: text; color: transparent;
-}
-
-.lp-lead {
-  margin-top: 1rem; max-width: 56ch;
-  font-size: 1.015rem; line-height: 1.62; color: var(--ink-2);
-}
-
-.lp-cta { display: flex; flex-wrap: wrap; gap: .7rem; margin-top: 1.6rem; }
-.lp-cta .btn { padding: .68rem 1.25rem; font-size: .925rem; }
-.lp-cta-note { margin-top: .85rem; font-size: .8rem; color: var(--ink-muted); }
-
-/* ---------- Hero visual ---------- */
-
-.lp-visual svg { width: 100%; height: auto; display: block; overflow: visible; }
-
-.lp-rings circle { fill: none; stroke: color-mix(in srgb, var(--ink) 13%, transparent); stroke-width: 1; }
-.lp-rings circle:last-child { stroke-dasharray: 3 6; }
-
-.lp-links line {
-  stroke: color-mix(in srgb, var(--series-1) 42%, transparent);
-  stroke-width: 1.2; stroke-dasharray: 4 8;
-  animation: lpFlow 3.2s linear infinite;
-}
-@keyframes lpFlow { to { stroke-dashoffset: -24; } }
-
-.lp-sweep { transform-origin: 240px 210px; animation: lpSpin 11s linear infinite; }
-@keyframes lpSpin { to { transform: rotate(360deg); } }
-
-.lp-node circle { fill: var(--fam); filter: drop-shadow(0 0 8px color-mix(in srgb, var(--fam) 75%, transparent)); }
-.lp-node .halo {
-  stroke: var(--fam); stroke-width: 1.6; fill: none; filter: none;
-  transform-box: fill-box; transform-origin: center;
-  animation: lpHalo 2.8s ease-out infinite;
-}
-.lp-node.fam-other .halo { animation-delay: 1.1s; }
-@keyframes lpHalo {
-  0%   { transform: scale(.55); opacity: .75; }
-  100% { transform: scale(2.9); opacity: 0; }
-}
-
-.lp-core circle { filter: drop-shadow(0 8px 22px color-mix(in srgb, var(--series-1) 55%, transparent)); }
-
-/* ---------- Numbers ---------- */
-
-.lp-stats {
-  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem;
-  padding: .5rem 0 1rem;
-}
-@media (max-width: 900px) { .lp-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-
-.lp-stat {
-  padding: 1.15rem 1.2rem; border-radius: var(--radius);
-  background: var(--glass); border: 1px solid var(--glass-line);
-  backdrop-filter: blur(18px) saturate(1.3); -webkit-backdrop-filter: blur(18px) saturate(1.3);
-  transition: transform .25s var(--ease), border-color .25s var(--ease);
-}
-.lp-stat:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--series-1) 35%, transparent); }
-.lp-stat .n {
-  display: block; font-size: 2.05rem; font-weight: 700; letter-spacing: -.035em; line-height: 1;
-  font-variant-numeric: tabular-nums;
-  background: linear-gradient(160deg, var(--ink) 25%, color-mix(in srgb, var(--series-1) 72%, var(--ink)));
-  -webkit-background-clip: text; background-clip: text; color: transparent;
-}
-.lp-stat .n i { font-style: normal; font-size: .62em; letter-spacing: -.01em; }
-.lp-stat .k {
-  display: block; margin-top: .5rem;
-  font-size: .74rem; font-weight: 650; letter-spacing: .05em; text-transform: uppercase; color: var(--ink);
-}
-.lp-stat .s { display: block; margin-top: .15rem; font-size: .765rem; color: var(--ink-muted); line-height: 1.45; }
-
-/* ---------- Section furniture ---------- */
-
-.lp-section { padding: 3.2rem 0 .5rem; }
-.lp-section-head { max-width: 68ch; margin-bottom: 1.5rem; }
-.lp-section-head h2 {
-  font-size: clamp(1.35rem, 2.6vw, 1.85rem); font-weight: 700; letter-spacing: -.028em;
-}
-.lp-section-head p { margin-top: .5rem; font-size: .92rem; line-height: 1.6; color: var(--ink-2); }
-.lp-footnote { margin-top: 1rem; font-size: .78rem; color: var(--ink-muted); max-width: 76ch; }
-
-/* ---------- Pipeline ---------- */
-
-.lp-flow {
-  position: relative; list-style: none; margin: 0; padding: 0;
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(186px, 1fr)); gap: 1rem;
-}
-/* The rail sits at the centre of the number badges and passes behind them. */
-.lp-flow::before {
-  content: ""; position: absolute; top: 17px; left: 8%; right: 8%; height: 2px; z-index: 0;
-  background: linear-gradient(90deg,
-    transparent,
-    color-mix(in srgb, var(--series-1) 55%, transparent) 18%,
-    color-mix(in srgb, var(--family-web) 55%, transparent) 82%,
-    transparent);
-}
-@media (max-width: 880px) { .lp-flow::before { display: none; } }
-
-.lp-step { position: relative; z-index: 1; display: flex; flex-direction: column; gap: .85rem; }
-.lp-step .n {
-  width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center;
-  font-size: .82rem; font-weight: 700; color: #fff;
-  background: linear-gradient(140deg, #5aa2ff, var(--series-1) 58%, #2560b5);
-  box-shadow: 0 4px 14px -4px color-mix(in srgb, var(--series-1) 70%, transparent),
-              inset 0 1px 0 rgba(255, 255, 255, .28);
-}
-.lp-step-body {
-  flex: 1; padding: .9rem 1rem; border-radius: var(--radius-sm);
-  background: var(--surface-sunk); border: 1px solid var(--border);
-  transition: transform .25s var(--ease), border-color .25s var(--ease);
-}
-.lp-step:hover .lp-step-body { transform: translateY(-2px); border-color: color-mix(in srgb, var(--series-1) 38%, transparent); }
-.lp-step h3 { font-size: .875rem; font-weight: 650; color: var(--ink); }
-.lp-step p { margin-top: .3rem; font-size: .785rem; line-height: 1.5; color: var(--ink-muted); }
-
-/* ---------- Families (reuses .family-grid / .family-card) ---------- */
-
-.lp-fam-count {
-  margin-left: auto; font-size: .68rem; font-weight: 650;
-  padding: .05rem .4rem; border-radius: 999px;
-  color: var(--fam); background: color-mix(in srgb, var(--fam) 14%, transparent);
-}
-
-/* ---------- Model scorecards ---------- */
-
-.lp-models { display: grid; grid-template-columns: repeat(auto-fit, minmax(268px, 1fr)); gap: 1rem; }
-.lp-model {
-  padding: 1.2rem 1.25rem 1.35rem; border-radius: var(--radius);
-  background: var(--glass); border: 1px solid var(--glass-line);
-  backdrop-filter: blur(18px) saturate(1.3); -webkit-backdrop-filter: blur(18px) saturate(1.3);
-  transition: transform .25s var(--ease), box-shadow .25s var(--ease);
-}
-.lp-model:hover { transform: translateY(-3px); box-shadow: 0 18px 40px -22px rgba(11, 11, 11, .5); }
-.lp-model.is-default { border-color: color-mix(in srgb, var(--series-1) 45%, transparent); }
-.lp-model header { display: flex; align-items: center; gap: .6rem; }
-.lp-model h3 { font-size: 1.02rem; font-weight: 660; letter-spacing: -.015em; }
-.lp-tag {
-  margin-left: auto; font-size: .655rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
-  padding: .16rem .48rem; border-radius: 999px; color: var(--series-1);
-  background: color-mix(in srgb, var(--series-1) 13%, transparent);
-  border: 1px solid color-mix(in srgb, var(--series-1) 34%, transparent);
-}
-.lp-model-blurb { margin-top: .45rem; font-size: .81rem; line-height: 1.5; color: var(--ink-muted); min-height: 2.4em; }
-.lp-metric { display: grid; gap: .3rem; margin-top: .95rem; }
-
-/* ---------- Ways in ---------- */
-
-.lp-uses { display: grid; grid-template-columns: repeat(auto-fit, minmax(276px, 1fr)); gap: 1rem; }
-.lp-use {
-  display: block; padding: 1.35rem 1.3rem; border-radius: var(--radius);
-  background: var(--glass); border: 1px solid var(--glass-line);
-  backdrop-filter: blur(18px) saturate(1.3); -webkit-backdrop-filter: blur(18px) saturate(1.3);
-  text-decoration: none; color: inherit;
-  transition: transform .25s var(--ease), border-color .25s var(--ease), box-shadow .25s var(--ease);
-}
-a.lp-use:hover {
-  transform: translateY(-3px);
-  border-color: color-mix(in srgb, var(--series-1) 42%, transparent);
-  box-shadow: 0 18px 40px -22px color-mix(in srgb, var(--series-1) 65%, transparent);
-}
-.lp-use-icon {
-  display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px;
-  color: var(--fam);
-  background: color-mix(in srgb, var(--fam) 14%, transparent);
-  border: 1px solid color-mix(in srgb, var(--fam) 30%, transparent);
-}
-.lp-use h3 { margin-top: .85rem; font-size: 1.02rem; font-weight: 660; letter-spacing: -.015em; }
-.lp-use p { margin-top: .4rem; font-size: .83rem; line-height: 1.55; color: var(--ink-2); }
-.lp-use p code {
-  font-size: .78em; padding: .06rem .3rem; border-radius: 4px;
-  background: var(--surface-sunk); border: 1px solid var(--line);
-}
-.lp-use-go { display: inline-block; margin-top: .85rem; font-size: .81rem; font-weight: 620; color: var(--series-1); }
-a.lp-use:hover .lp-use-go { text-decoration: underline; text-underline-offset: 3px; }
-
-/* ---------- How it was built ---------- */
-
-.lp-work { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; }
-.lp-work-item {
-  padding: 1rem 1.1rem; border-radius: var(--radius-sm);
-  background: var(--surface-sunk); border: 1px solid var(--border);
-  border-top: 2px solid color-mix(in srgb, var(--series-1) 55%, transparent);
-}
-.lp-work-item h3 { font-size: .865rem; font-weight: 650; color: var(--ink); }
-.lp-work-item p { margin-top: .35rem; font-size: .79rem; line-height: 1.55; color: var(--ink-muted); }
-
-/* ---------- Closing band ---------- */
-
-.lp-close { padding: 3.4rem 0 3.5rem; }
-.lp-close-inner {
-  position: relative; overflow: hidden;
-  padding: 2.6rem 2rem; border-radius: var(--radius); text-align: center;
-  border: 1px solid var(--glass-line);
-  background:
-    radial-gradient(30rem 14rem at 50% -20%, color-mix(in srgb, var(--series-1) 24%, transparent), transparent 70%),
-    var(--glass);
-  backdrop-filter: blur(18px) saturate(1.3); -webkit-backdrop-filter: blur(18px) saturate(1.3);
-}
-.lp-close-inner h2 { font-size: clamp(1.35rem, 2.6vw, 1.85rem); font-weight: 700; letter-spacing: -.028em; }
-.lp-close-inner p { margin-top: .5rem; font-size: .92rem; color: var(--ink-2); }
-.lp-close-inner .lp-cta { justify-content: center; }
-
-/* ---------- Scroll reveal (added by home.html; no-JS shows everything) ---------- */
-
-/* `translate` rather than `transform`, so the hover lifts on these same cards
-   still work once the element has been revealed -- the two compose instead of
-   one overriding the other. */
-.lp-reveal { opacity: 0; translate: 0 16px; transition: opacity .6s var(--ease), translate .6s var(--ease); }
-.lp-reveal.is-in { opacity: 1; translate: none; }
-
-@media (prefers-reduced-motion: reduce) {
-  .lp-links line, .lp-sweep, .lp-node .halo, .lp-badge-dot { animation: none !important; }
-  .lp-reveal { opacity: 1 !important; translate: none !important; transition: none !important; }
-}
-
-/* ---------- Six families read best as two rows of three ---------- */
-
-@media (min-width: 1040px) {
-  .lp-section .family-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
-
 /* ---------- Narrow-screen top bar ----------
    A fourth nav item ("Overview") no longer fits beside the brand on a phone,
    and an overflowing sticky bar drags the whole page sideways. Below 640px the
@@ -1258,3 +637,92 @@ a.lp-use:hover .lp-use-go { text-decoration: underline; text-underline-offset: 3
 }
 .live-verdict { color: var(--ink); font-weight: 600; }
 tr.is-attack-row td { background: color-mix(in srgb, var(--critical) 5%, transparent); }
+
+/* ==========================================================================
+   Dashboard (redesign) — clean operator console, no decorative motion.
+   ========================================================================== */
+
+/* A single hairline accent on the sticky bar reads as "instrument", not SaaS. */
+.topbar { border-top: 2px solid var(--series-1); }
+
+.dash-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 1rem; flex-wrap: wrap; padding: 2rem 0 1.5rem;
+}
+.dash-head h1 { font-size: 1.55rem; }
+.dash-head p { color: var(--ink-2); font-size: .92rem; margin-top: .35rem; max-width: 68ch; }
+
+/* Status chip — the one place a dot animates, and only while capture is live. */
+.status-chip {
+  display: inline-flex; align-items: center; gap: .5rem; flex: none;
+  padding: .4rem .8rem; border-radius: 999px;
+  font-size: .78rem; font-weight: 600; letter-spacing: .01em;
+  border: 1px solid var(--border); background: var(--surface-sunk); color: var(--ink-2);
+}
+.status-chip .status-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; }
+.status-chip.is-live { color: var(--good-text); border-color: color-mix(in srgb, var(--good) 40%, transparent); }
+.status-chip.is-live .status-dot { background: var(--good); animation: status-pulse 1.3s ease-in-out infinite; }
+.status-chip.is-ready { color: var(--ink-2); }
+.status-chip.is-off { color: var(--ink-muted); }
+@keyframes status-pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+@media (prefers-reduced-motion: reduce) { .status-chip.is-live .status-dot { animation: none; } }
+
+/* Feature cards — the three primary entry points. */
+.feature-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem; padding-bottom: 2rem;
+}
+.feature-card {
+  display: flex; flex-direction: column;
+  padding: 1.35rem 1.35rem 1.45rem; border-radius: var(--radius);
+  background: var(--surface); border: 1px solid var(--line);
+  border-top: 3px solid var(--fam);
+  transition: border-color .15s ease;
+}
+.feature-card:hover { border-color: var(--line-strong); border-top-color: var(--fam); }
+.feature-top { display: flex; align-items: center; gap: .7rem; }
+.feature-icon {
+  display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px;
+  color: var(--fam); background: color-mix(in srgb, var(--fam) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--fam) 28%, transparent); flex: none;
+}
+.feature-card h2 { font-size: 1.05rem; }
+.feature-card p { margin-top: .75rem; font-size: .855rem; line-height: 1.5; color: var(--ink-2); flex: 1; }
+.feature-btn { margin-top: 1.1rem; justify-content: center; }
+
+/* Section furniture */
+.dash-section { padding: 1.25rem 0 0; }
+.dash-section + .dash-section { padding-top: 2.25rem; }
+.section-head { margin-bottom: 1rem; }
+.section-head h2 { font-size: 1.15rem; }
+.section-head p { font-size: .85rem; color: var(--ink-muted); margin-top: .25rem; }
+
+/* Overview split: recent detection + model comparison */
+.overview-split {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1rem; margin-top: 1rem;
+}
+.recent-run { display: flex; flex-direction: column; gap: .6rem; }
+.recent-when { display: flex; align-items: center; gap: .6rem; }
+.recent-verdict { display: flex; flex-direction: column; gap: .3rem; }
+
+.model-rows { display: grid; gap: .9rem; }
+.model-row-head { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; margin-bottom: .35rem; }
+.model-name { font-size: .85rem; font-weight: 600; color: var(--ink); display: inline-flex; align-items: center; gap: .4rem; }
+.model-row.is-default .bar-fill { background: var(--series-1); }
+.model-row .bar-fill { background: color-mix(in srgb, var(--series-1) 55%, var(--line-strong)); }
+
+/* Dataset facts strip */
+.dataset-facts {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .85rem; margin-top: 1.25rem;
+}
+@media (max-width: 620px) { .dataset-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.dataset-facts > div {
+  padding: 1rem 1.1rem; border-radius: var(--radius-sm);
+  background: var(--surface-sunk); border: 1px solid var(--border); text-align: left;
+}
+.df-n { display: block; font-size: 1.5rem; font-weight: 680; letter-spacing: -.02em; color: var(--ink); font-variant-numeric: tabular-nums; }
+.df-k { display: block; margin-top: .2rem; font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-muted); }
+
+/* A text value (e.g. the model name) must wrap rather than clip the tile. */
+.tile .v.v-text { font-size: 1.05rem; line-height: 1.25; white-space: normal; word-break: break-word; }

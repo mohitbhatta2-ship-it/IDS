@@ -25,11 +25,38 @@ def _base_context(active: str) -> dict:
 
 def home(request):
     """
-    Static overview. Nothing here touches a model, so the page renders even on a
-    machine where the .pkl files have not been pulled from LFS -- the scorecards
-    read from the registry rather than from disk.
+    The operator dashboard: three feature entry points plus a live system
+    overview drawn from real backend state -- the active model, whether capture
+    is available/running, the run log's totals, and the most recent detection.
+
+    Everything that reads the model registry works even when the .pkl files are
+    not on disk, so the page still renders on a fresh clone. The history and
+    capture look-ups are wrapped so a missing log or absent scapy degrades to a
+    quiet default rather than a 500.
     """
     context = _base_context("home")
+
+    default_spec = ml.MODEL_REGISTRY[ml.DEFAULT_MODEL]
+
+    # History overview -- real totals from the append-only run log.
+    try:
+        recent_runs = history_log.recent()
+        summary = history_log.summarise(recent_runs)
+        history_total = history_log.count()
+    except Exception:  # noqa: BLE001 - the log must never break the dashboard
+        recent_runs, summary, history_total = [], None, 0
+
+    last_run = recent_runs[0] if recent_runs else None
+
+    # Live-capture status -- reflects the actual CaptureManager, if any.
+    try:
+        capture_supported = live_capture.capture_supported()
+        live_session = live_capture.manager.session
+        live_running = bool(live_session and live_session.running)
+        live_snapshot = live_session.snapshot() if live_session else None
+    except Exception:  # noqa: BLE001
+        capture_supported, live_running, live_snapshot = False, False, None
+
     context.update(
         {
             "families": classes.legend(),
@@ -46,6 +73,15 @@ def home(request):
                 }
                 for key, spec in ml.MODEL_REGISTRY.items()
             ],
+            # System overview
+            "active_model": default_spec,
+            "model_count": len(ml.available_models()),
+            "capture_supported": capture_supported,
+            "live_running": live_running,
+            "live_snapshot": live_snapshot,
+            "history_total": history_total,
+            "summary": summary,
+            "last_run": last_run,
         }
     )
     return render(request, "predictor/home.html", context)
