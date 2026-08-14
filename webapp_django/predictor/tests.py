@@ -779,3 +779,157 @@ class LiveInterfaceMappingTests(TestCase):
             self.assertIn(item["value"], raw_ids)
             # ...and the label must never leak a full device path.
             self.assertNotIn("\\Device", item["label"])
+
+
+# ---------------------------------------------------------------------------
+# Live-detection root-cause diagnostics
+#
+# These pin down WHY real captured attacks (e.g. FTP brute force) read as Benign.
+# They prove the live extractor and preprocessing are correct, and document the
+# training-data artifact that the model actually learned -- so the failure is a
+# train/serve distribution mismatch, not a bug in the live code.
+# ---------------------------------------------------------------------------
+
+import os as _os
+from pathlib import Path as _Path
+
+
+def _ftp_bruteforce_flow():
+    """A realistic single FTP brute-force login attempt (client -> vsftpd:21)."""
+    from scapy.layers.inet import IP, TCP
+    from scapy.packet import Raw
+    live_capture._ensure_live_on_path()
+    from flow import Flow
+    from feature_extractor import update_flow
+
+    CLI, SRV, sp, dp = "172.24.48.1", "172.24.60.225", 54011, 21
+    t = [1_530_000_000.0]
+
+    def pk(src, dst, spt, dpt, flags, payload=b"", dt=0.0):
+        t[0] += dt
+        p = IP(src=src, dst=dst) / TCP(sport=spt, dport=dpt, flags=flags, window=64240)
+        if payload:
+            p = p / Raw(payload)
+        p.time = t[0]
+        return p
+
+    seq = [
+        (CLI, SRV, "S", b"", 0.0), (SRV, CLI, "SA", b"", 0.0004), (CLI, SRV, "A", b"", 0.0002),
+        (SRV, CLI, "PA", b"220 (vsFTPd 3.0.3)\r\n", 0.010),
+        (CLI, SRV, "PA", b"USER admin\r\n", 0.030),
+        (SRV, CLI, "PA", b"331 Please specify the password.\r\n", 0.012),
+        (CLI, SRV, "PA", b"PASS wrongpassword\r\n", 0.045),
+        (SRV, CLI, "PA", b"530 Login incorrect.\r\n", 0.020),
+        (CLI, SRV, "FA", b"", 0.015), (SRV, CLI, "FA", b"", 0.004),
+    ]
+    f = Flow(src_ip=CLI, dst_ip=SRV, src_port=sp, dst_port=dp, protocol=6)
+    for src, dst, fl, pl, dt in seq:
+        spt, dpt = (sp, dp) if src == CLI else (dp, sp)
+        update_flow(f, pk(src, dst, spt, dpt, fl, pl, dt))
+    return f
+
+
+@skipUnless(_SCAPY, "scapy is required")
+class LiveExtractionDiagnosticsTests(TestCase):
+    """Rules out A (extraction), B (preprocessing) and C (finalization/direction)."""
+
+    def setUp(self):
+        live_capture._ensure_live_on_path()
+
+    def test_extraction_is_correct_for_a_known_ftp_flow(self):
+        from feature_calculator import calculate_features
+        f = _ftp_bruteforce_flow()
+        feats = calculate_features(f)
+
+        # Direction: server port 21 kept as Dst Port; both directions counted.
+        self.assertEqual(feats["Dst Port"], 21)
+        self.assertEqual(f.forward_packets, 5)
+        self.assertEqual(f.backward_packets, 5)
+
+        # Duration is the real ~137 ms, NOT the training class's ~4 us artifact.
+        self.assertGreater(feats["Flow Duration"], 100_000)
+
+        # Payload bytes are summed correctly (USER+PASS fwd, three replies bwd).
+        self.assertEqual(feats["TotLen Fwd Pkts"], 32)
+        self.assertEqual(feats["TotLen Bwd Pkts"], 76)
+
+        # Transport header length: 5 forward TCP packets x 20 bytes.
+        self.assertEqual(feats["Fwd Header Len"], 100)
+        self.assertEqual(feats["Fwd Seg Size Min"], 20)
+
+        # Every training feature is present (nothing 0-filled by _as_frame).
+        self.assertEqual(set(feats), set(ml.FEATURES))
+
+    def test_short_tcp_flow_is_finalized_during_capture(self):
+        # The flow closes with FIN both ways, so it must classify without a flush.
+        session = live_capture.CaptureSession(interface=None, model_key=ml.DEFAULT_MODEL)
+        from scapy.layers.inet import IP, TCP
+        f = _ftp_bruteforce_flow()  # reuse packet script via a fresh session feed
+        # Re-drive the same packets through the session handler:
+        from scapy.packet import Raw
+        CLI, SRV, sp, dp = "172.24.48.1", "172.24.60.225", 54011, 21
+        t = [1_530_000_000.0]
+        script = [
+            (CLI, SRV, "S", b"", 0.0), (SRV, CLI, "SA", b"", 0.0004), (CLI, SRV, "A", b"", 0.0002),
+            (SRV, CLI, "PA", b"220 x\r\n", 0.010), (CLI, SRV, "PA", b"USER admin\r\n", 0.030),
+            (SRV, CLI, "PA", b"331 x\r\n", 0.012), (CLI, SRV, "PA", b"PASS y\r\n", 0.045),
+            (SRV, CLI, "PA", b"530 x\r\n", 0.020), (CLI, SRV, "FA", b"", 0.015), (SRV, CLI, "FA", b"", 0.004),
+        ]
+        for src, dst, fl, pl, dt in script:
+            spt, dpt = (sp, dp) if src == CLI else (dp, sp)
+            t[0] += dt
+            p = IP(src=src, dst=dst) / TCP(sport=spt, dport=dpt, flags=fl, window=64240)
+            if pl:
+                p = p / Raw(pl)
+            p.time = t[0]
+            session._handle(p)
+        snap = session.snapshot()
+        self.assertEqual(snap["flows"], 1, "closed flow must classify without flush")
+        self.assertEqual(len(session._flows), 0)
+        rec = snap["recent"][0]
+        self.assertEqual((rec["src_ip"], rec["dst_port"], rec["protocol"]), ("172.24.48.1", 21, "TCP"))
+
+    def test_live_and_dataset_testing_share_identical_preprocessing(self):
+        import pandas as pd
+        from feature_calculator import calculate_features
+        feats = calculate_features(_ftp_bruteforce_flow())
+
+        one = ml.predict_one(feats, "histgradientboosting")
+        df = pd.DataFrame([{k: feats.get(k, 0.0) for k in ml.FEATURES}])
+        batch = ml.predict_batch(df, "histgradientboosting")
+        b_label = batch["frame"]["Predicted Class"].iloc[0]
+        b_conf = float(batch["frame"]["Confidence"].iloc[0])
+
+        self.assertEqual(one["label"], b_label)
+        self.assertAlmostEqual(one["confidence"], b_conf, places=9)
+
+
+def _train_parquet():
+    p = _Path(_os.environ.get("IDS_DATA_ROOT", "/home/user/IDS/webapp_data")) \
+        / "Processed_Data" / "balanced_train_selected.parquet"
+    return p if p.is_file() else None
+
+
+@skipUnless(_train_parquet() is not None, "training parquet (Git LFS) required")
+class TrainingArtifactEvidenceTests(TestCase):
+    """Documents the root cause: the FTP-BruteForce class is defined by
+    zero-payload / microsecond flow artifacts a real capture cannot reproduce."""
+
+    def test_ftp_bruteforce_class_is_dominated_by_zero_payload_micro_flows(self):
+        import pandas as pd
+        train = pd.read_parquet(_train_parquet())
+        # Encode -> name via the shipped mapping
+        import csv as _csv
+        mapping = {}
+        with open(_Path(_os.environ.get("IDS_DATA_ROOT", "/home/user/IDS/webapp_data"))
+                  / "Processed_Data" / "label_mapping.csv") as fh:
+            for row in _csv.DictReader(fh):
+                mapping[int(row["Encoded"])] = row["Class"]
+        ftp = train[train["Label"].map(mapping) == "FTP-BruteForce"]
+        self.assertGreater(len(ftp), 0)
+
+        zero_payload = (ftp["TotLen Fwd Pkts"] == 0).mean()
+        micro = (ftp["Flow Duration"] < 1000).mean()  # < 1 ms
+        # These are the artifact signatures a real login (payload + ~100 ms) can't match.
+        self.assertGreater(zero_payload, 0.9, "expected ~100% zero forward payload")
+        self.assertGreater(micro, 0.9, "expected ~100% sub-millisecond duration")
