@@ -434,16 +434,116 @@ class CaptureManager:
 manager = CaptureManager()
 
 
-def list_interfaces() -> list[str]:
+def _fallback_label(raw: str) -> str:
     """
-    Available capture interface names, or an empty list if scapy is unavailable.
-    Never raises -- the page falls back to the "Auto" option alone.
+    A safe display label for a raw interface id we could not resolve to a
+    friendly name -- WITHOUT exposing the whole `\\Device\\NPF_{...}` path and
+    WITHOUT guessing an adapter name from the GUID.
+
+    On Windows the raw id looks like `\\Device\\NPF_{B82DF013-...}`; we show
+    `Network Adapter (NPF_{B82DF013})` -- the leading GUID segment only, purely
+    as a disambiguator. `\\Device\\NPF_Loopback` maps to `Loopback`. On Linux the
+    raw id (`eth0`, `lo`, ...) is already human-readable, so it is shown as-is.
+    """
+    text = str(raw)
+    if text.endswith("NPF_Loopback"):
+        return "Loopback"
+
+    marker = "NPF_"
+    idx = text.find(marker)
+    if idx != -1:
+        tail = text[idx + len(marker):].strip("{}")
+        segment = tail.split("-", 1)[0] or tail
+        segment = segment[:8]
+        return f"Network Adapter (NPF_{{{segment}}})"
+
+    # Linux / WSL / macOS: the device name is already friendly.
+    if text == "lo":
+        return "Loopback"
+    return text
+
+
+def _label_from_iface(iface) -> str | None:
+    """
+    Friendly label from a scapy NetworkInterface, using the real OS / Npcap
+    metadata scapy has already resolved -- never guessed from a GUID.
+
+    On Windows `name` is the connection name ("Wi-Fi", "Ethernet"); on Linux it
+    is the device name ("eth0"). Loopback is normalised to "Loopback".
+    """
+    name = (getattr(iface, "name", None) or "").strip()
+    network_name = (getattr(iface, "network_name", None) or "").strip()
+    description = (getattr(iface, "description", None) or "").strip()
+
+    if network_name.endswith("NPF_Loopback") or name in ("lo", "Loopback"):
+        return "Loopback"
+
+    # Prefer the connection name; fall back to the adapter description. Skip a
+    # name that is itself a raw NPF path (some scapy versions leave it there).
+    for candidate in (name, description):
+        if candidate and "NPF_" not in candidate and not candidate.startswith("\\Device"):
+            return candidate
+    return None
+
+
+def _resolve_interfaces(raw_list, iface_objects) -> list[dict]:
+    """
+    Pure mapping: raw scapy interface ids -> [{"value": raw, "label": friendly}].
+
+    ``value`` is always the unchanged id scapy is given at capture time; only the
+    display label is friendly. Kept separate from scapy calls so it is testable
+    without a live adapter (e.g. with synthetic Windows-style interfaces).
+    """
+    lookup: dict[str, str] = {}
+    for iface in iface_objects or []:
+        label = _label_from_iface(iface)
+        if not label:
+            continue
+        for key in (getattr(iface, "network_name", None), getattr(iface, "name", None)):
+            if key:
+                lookup.setdefault(str(key), label)
+
+    out = []
+    for raw in raw_list:
+        label = lookup.get(str(raw)) or _fallback_label(raw)
+        out.append({"value": raw, "label": label})
+
+    # De-duplicate identical labels (e.g. two adapters both named "Ethernet") by
+    # appending the safe fallback to the later ones, so every option stays
+    # distinguishable without exposing the raw path.
+    seen: dict[str, int] = {}
+    for item in out:
+        base = item["label"]
+        if base in seen:
+            item["label"] = f"{base} ({_fallback_label(item['value'])})"
+        seen[base] = seen.get(base, 0) + 1
+
+    out.sort(key=lambda i: i["label"].lower())
+    return out
+
+
+def list_interfaces() -> list[dict]:
+    """
+    Capture interfaces as ``[{"value": <raw scapy id>, "label": <friendly>}]``.
+
+    The value is exactly what scapy's ``sniff(iface=...)`` is given today, so the
+    capture mechanism is unchanged; the label is a human-readable name resolved
+    from scapy's real interface metadata. Returns an empty list (page falls back
+    to "Auto" alone) if scapy is unavailable. Never raises.
     """
     try:
         _ensure_live_on_path()
         from scapy.all import get_if_list
 
-        return sorted(get_if_list())
+        raw_list = get_if_list()
+        try:
+            from scapy.interfaces import conf
+
+            iface_objects = list(conf.ifaces.values())
+        except Exception:  # noqa: BLE001 - fall back to labels from the raw ids
+            iface_objects = []
+
+        return _resolve_interfaces(raw_list, iface_objects)
     except Exception:  # noqa: BLE001
         return []
 

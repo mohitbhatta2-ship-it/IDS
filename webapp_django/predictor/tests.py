@@ -611,3 +611,139 @@ class LiveViewTests(TestCase):
         live_capture.manager._session = None
         data = self.client.post("/live/stop/").json()
         self.assertFalse(data["running"])
+
+    def test_selecting_a_friendly_interface_captures_on_its_raw_value(self):
+        """
+        The dropdown's option value is the raw scapy id; the friendly name is
+        display only. Starting with that value must set the session interface to
+        the exact raw id, so scapy captures on the correct underlying interface.
+        """
+        self.addCleanup(setattr, live_capture.manager, "_session", None)
+        raw = r"\Device\NPF_{B82DF013-1A2B-3C4D-5E6F-0011223344AA}"
+        with mock.patch.object(live_capture.CaptureSession, "_run", lambda self: None), \
+                mock.patch.object(live_capture, "_ensure_live_on_path", return_value=None), \
+                mock.patch("scapy.all.sniff", create=True):
+            resp = self.client.post(
+                "/live/start/",
+                data=json.dumps({"model_key": ml.DEFAULT_MODEL, "iface": raw}),
+                content_type="application/json",
+            )
+            self.assertEqual(resp.status_code, 200)
+            self.assertEqual(live_capture.manager.session.interface, raw)
+
+    def test_auto_maps_to_scapy_default(self):
+        self.addCleanup(setattr, live_capture.manager, "_session", None)
+        with mock.patch.object(live_capture.CaptureSession, "_run", lambda self: None), \
+                mock.patch.object(live_capture, "_ensure_live_on_path", return_value=None), \
+                mock.patch("scapy.all.sniff", create=True):
+            resp = self.client.post(
+                "/live/start/",
+                data=json.dumps({"model_key": ml.DEFAULT_MODEL, "iface": "auto"}),
+                content_type="application/json",
+            )
+            self.assertEqual(resp.status_code, 200)
+            self.assertIsNone(live_capture.manager.session.interface)
+
+
+class _FakeIface:
+    def __init__(self, name, network_name, description=""):
+        self.name = name
+        self.network_name = network_name
+        self.description = description
+
+
+class LiveInterfaceMappingTests(TestCase):
+    """Friendly interface labels map onto the raw scapy ids without guessing."""
+
+    WIFI = r"\Device\NPF_{B82DF013-1A2B-3C4D-5E6F-0011223344AA}"
+    ETH = r"\Device\NPF_{11112222-3333-4444-5555-666677778888}"
+    UNKNOWN = r"\Device\NPF_{DEADBEEF-9999-0000-1111-222233334444}"
+    LOOPBACK = r"\Device\NPF_Loopback"
+
+    # -- fallback labels ---------------------------------------------------
+
+    def test_unresolved_npf_id_is_a_safe_short_label_not_the_full_path(self):
+        label = live_capture._fallback_label(self.UNKNOWN)
+        self.assertEqual(label, "Network Adapter (NPF_{DEADBEEF})")
+        self.assertNotIn("\\Device", label)
+        self.assertNotIn("DEADBEEF-9999", label)  # not the whole GUID either
+
+    def test_npf_loopback_falls_back_to_loopback(self):
+        self.assertEqual(live_capture._fallback_label(self.LOOPBACK), "Loopback")
+
+    def test_posix_names_are_shown_as_is_with_lo_named_loopback(self):
+        self.assertEqual(live_capture._fallback_label("eth0"), "eth0")
+        self.assertEqual(live_capture._fallback_label("lo"), "Loopback")
+
+    # -- labels from scapy interface metadata ------------------------------
+
+    def test_label_prefers_the_connection_name(self):
+        self.assertEqual(
+            live_capture._label_from_iface(_FakeIface("Wi-Fi", self.WIFI, "Intel Wi-Fi 6")),
+            "Wi-Fi",
+        )
+
+    def test_label_normalises_loopback(self):
+        self.assertEqual(
+            live_capture._label_from_iface(_FakeIface("Npcap Loopback Adapter", self.LOOPBACK)),
+            "Loopback",
+        )
+
+    def test_label_never_returns_a_raw_npf_path(self):
+        # Some scapy builds leave the NPF path in `name`; that must not be used.
+        self.assertIsNone(live_capture._label_from_iface(_FakeIface(self.WIFI, self.WIFI)))
+
+    # -- full resolution ---------------------------------------------------
+
+    def test_resolution_maps_friendly_names_and_keeps_raw_values(self):
+        objs = [
+            _FakeIface("Wi-Fi", self.WIFI, "Intel(R) Wi-Fi 6 AX201"),
+            _FakeIface("Ethernet", self.ETH, "Realtek PCIe GbE"),
+            _FakeIface("Npcap Loopback Adapter", self.LOOPBACK),
+        ]
+        raw_list = [self.WIFI, self.ETH, self.LOOPBACK, self.UNKNOWN]
+        resolved = live_capture._resolve_interfaces(raw_list, objs)
+
+        by_value = {i["value"]: i["label"] for i in resolved}
+        # Every raw id is preserved verbatim as the option value.
+        self.assertEqual(set(by_value), set(raw_list))
+        self.assertEqual(by_value[self.WIFI], "Wi-Fi")
+        self.assertEqual(by_value[self.ETH], "Ethernet")
+        self.assertEqual(by_value[self.LOOPBACK], "Loopback")
+        self.assertEqual(by_value[self.UNKNOWN], "Network Adapter (NPF_{DEADBEEF})")
+        # No label ever exposes the full device path.
+        for item in resolved:
+            self.assertNotIn("\\Device", item["label"])
+
+    def test_duplicate_labels_are_disambiguated(self):
+        objs = [
+            _FakeIface("Ethernet", self.WIFI),
+            _FakeIface("Ethernet", self.ETH),
+        ]
+        resolved = live_capture._resolve_interfaces([self.WIFI, self.ETH], objs)
+        labels = [i["label"] for i in resolved]
+        self.assertEqual(len(set(labels)), 2, f"labels should be distinct: {labels}")
+
+    def test_resolution_falls_back_when_no_metadata(self):
+        # No scapy interface objects (e.g. lookup failed): labels come from the
+        # raw ids alone, still safe.
+        resolved = live_capture._resolve_interfaces([self.LOOPBACK, self.UNKNOWN, "eth0"], [])
+        by_value = {i["value"]: i["label"] for i in resolved}
+        self.assertEqual(by_value[self.LOOPBACK], "Loopback")
+        self.assertEqual(by_value["eth0"], "eth0")
+        self.assertTrue(by_value[self.UNKNOWN].startswith("Network Adapter (NPF_{"))
+
+    @skipUnless(_SCAPY, "scapy is required to enumerate interfaces")
+    def test_list_interfaces_shape_and_value_integrity(self):
+        from scapy.all import get_if_list
+
+        raw_ids = set(get_if_list())
+        items = live_capture.list_interfaces()
+        self.assertTrue(items, "expected at least one interface on this host")
+        for item in items:
+            self.assertIn("value", item)
+            self.assertIn("label", item)
+            # The value must be a real scapy id (unchanged capture mechanism)...
+            self.assertIn(item["value"], raw_ids)
+            # ...and the label must never leak a full device path.
+            self.assertNotIn("\\Device", item["label"])

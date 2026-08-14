@@ -56,7 +56,7 @@
         <select name="iface" id="live-iface">
           <option value="auto">Auto (Scapy default)</option>
           {% for iface in interfaces %}
-            <option value="{{ iface }}">{{ iface }}</option>
+            <option value="{{ iface.value }}">{{ iface.label }}</option>
           {% endfor %}
         </select>
       </div>
