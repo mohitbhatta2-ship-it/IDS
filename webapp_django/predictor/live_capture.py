@@ -493,9 +493,18 @@ def _resolve_interfaces(raw_list, iface_objects) -> list[dict]:
     ``value`` is always the unchanged id scapy is given at capture time; only the
     display label is friendly. Kept separate from scapy calls so it is testable
     without a live adapter (e.g. with synthetic Windows-style interfaces).
+
+    ``raw_list`` is what ``get_if_list()`` returns. Some adapters scapy has fully
+    resolved (in ``conf.ifaces``) carry a capture id but are missing from that
+    list -- notably Hyper-V virtual adapters such as the WSL
+    ``vEthernet (WSL ...)`` bridge. Those are added from their real
+    ``network_name`` so they become selectable, using scapy's own resolved id and
+    name (never guessed from a GUID).
     """
+    iface_objects = list(iface_objects or [])
+
     lookup: dict[str, str] = {}
-    for iface in iface_objects or []:
+    for iface in iface_objects:
         label = _label_from_iface(iface)
         if not label:
             continue
@@ -503,9 +512,24 @@ def _resolve_interfaces(raw_list, iface_objects) -> list[dict]:
             if key:
                 lookup.setdefault(str(key), label)
 
-    out = []
+    # get_if_list() first (unchanged), then any resolved interface with a capture
+    # id that it omitted -- preserving order and de-duplicating by id.
+    ids: list[str] = []
+    seen_ids: set[str] = set()
     for raw in raw_list:
-        label = lookup.get(str(raw)) or _fallback_label(raw)
+        rid = str(raw)
+        if rid not in seen_ids:
+            ids.append(rid)
+            seen_ids.add(rid)
+    for iface in iface_objects:
+        nn = getattr(iface, "network_name", None)
+        if nn and str(nn) not in seen_ids:
+            ids.append(str(nn))
+            seen_ids.add(str(nn))
+
+    out = []
+    for raw in ids:
+        label = lookup.get(raw) or _fallback_label(raw)
         out.append({"value": raw, "label": label})
 
     # De-duplicate identical labels (e.g. two adapters both named "Ethernet") by

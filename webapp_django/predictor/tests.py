@@ -724,6 +724,38 @@ class LiveInterfaceMappingTests(TestCase):
         labels = [i["label"] for i in resolved]
         self.assertEqual(len(set(labels)), 2, f"labels should be distinct: {labels}")
 
+    def test_hyperv_wsl_adapter_is_surfaced_from_conf_ifaces(self):
+        """
+        The WSL 'vEthernet (WSL ...)' bridge is a Hyper-V virtual adapter: scapy
+        knows it (conf.ifaces) with a real network_name, but get_if_list() omits
+        it. It must still appear, labelled from its real name and mapped to its
+        real NPF capture id -- never guessed from the GUID.
+        """
+        wsl_npf = r"\Device\NPF_{A1B2C3D4-5566-7788-99AA-BBCCDDEEFF00}"
+        wsl = _FakeIface("vEthernet (WSL (Hyper-V firewall))", wsl_npf,
+                         "Hyper-V Virtual Ethernet Adapter")
+        physical = _FakeIface("Wi-Fi", self.WIFI, "Intel Wi-Fi 6")
+
+        # get_if_list() sees only Wi-Fi; conf.ifaces knows Wi-Fi + the WSL bridge.
+        resolved = live_capture._resolve_interfaces([self.WIFI], [physical, wsl])
+        by_label = {i["label"]: i["value"] for i in resolved}
+
+        self.assertIn("vEthernet (WSL (Hyper-V firewall))", by_label)
+        self.assertEqual(by_label["vEthernet (WSL (Hyper-V firewall))"], wsl_npf)
+        # It was not in get_if_list(), yet is now selectable.
+        self.assertNotIn(wsl_npf, [self.WIFI])
+        # The friendly Wi-Fi option is untouched, and no raw path leaks.
+        self.assertEqual(by_label["Wi-Fi"], self.WIFI)
+        for item in resolved:
+            self.assertNotIn("\\Device", item["label"])
+
+    def test_conf_ifaces_without_a_capture_id_are_not_added(self):
+        """An adapter scapy lists but with no network_name can't be captured, so
+        it must not become a dead option."""
+        no_id = _FakeIface("Bluetooth Network Connection", "", "BT PAN")
+        resolved = live_capture._resolve_interfaces([self.WIFI], [no_id])
+        self.assertEqual([i["value"] for i in resolved], [self.WIFI])
+
     def test_resolution_falls_back_when_no_metadata(self):
         # No scapy interface objects (e.g. lookup failed): labels come from the
         # raw ids alone, still safe.
