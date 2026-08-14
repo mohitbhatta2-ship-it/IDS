@@ -61,143 +61,206 @@
   </article>
 </section>
 
-{# ===================== System overview ===================== #}
-<section class="dash-section" aria-label="System overview">
-  <div class="section-head">
-    <h2>System overview</h2>
-    <p>Live state from the model registry, capture manager, and run log.</p>
-  </div>
-
-  <div class="tiles">
-    <div class="tile by-family fam-bruteforce">
-      <div class="k">Active model</div>
-      <div class="v v-text">{{ active_model.name }}</div>
-      <div class="s">macro F1 {{ active_model.macro_f1|floatformat:4 }} · acc {{ active_model.accuracy|floatformat:4 }}</div>
-    </div>
-    <div class="tile">
-      <div class="k">Models available</div>
-      <div class="v">{{ model_count }}</div>
-      <div class="s">selectable per prediction</div>
-    </div>
-    <div class="tile {% if live_running %}accent-good{% endif %}">
-      <div class="k">Capture status</div>
-      <div class="v">
-        {% if live_running %}Running{% elif capture_supported %}Ready{% else %}Offline{% endif %}
-      </div>
-      <div class="s">
-        {% if live_running and live_snapshot %}{{ live_snapshot.flows }} flows · {{ live_snapshot.packets }} packets
-        {% elif capture_supported %}start from Live Capture
-        {% else %}Scapy / privileges required{% endif %}
-      </div>
-    </div>
-    <div class="tile">
-      <div class="k">Detection runs</div>
-      <div class="v">{{ history_total }}</div>
-      <div class="s">
-        {% if summary and summary.flows %}{{ summary.flows }} flows classified{% else %}logged to history{% endif %}
-      </div>
-    </div>
-    <div class="tile {% if summary.attacks %}accent-critical{% endif %}">
-      <div class="k">Flagged as attack</div>
-      <div class="v">{% if summary %}{{ summary.attacks }}{% else %}0{% endif %}</div>
-      <div class="s">
-        {% if summary and summary.flows %}{{ summary.attack_pct|floatformat:1 }}% of flows seen{% else %}across recent runs{% endif %}
-      </div>
-    </div>
-  </div>
-
+{# ===================== Operational status ===================== #}
+<section class="dash-section" aria-label="Status">
   <div class="overview-split">
-    {# ---- Recent detection ---- #}
+
+    {# ---- Latest Dataset Test (offline) — clearly separated from live capture ---- #}
     <div class="card">
       <div class="card-head">
-        <h2>Recent detection</h2>
-        <p>most recent run in the log</p>
+        <h2>Latest Dataset Test</h2>
+        <p>most recent offline dataset evaluation — not live capture</p>
       </div>
       <div class="card-body">
-        {% if last_run %}
-          <div class="recent-run">
-            <div class="recent-when">
-              <span class="pill">{{ last_run.kind_display }}</span>
-              <span class="when-rel">{{ last_run.at|naturaltime }}</span>
+        {% if latest_batch %}
+          <div class="recent-when" style="margin-bottom: .9rem;">
+            <span class="filename" title="{{ latest_batch.source_filename }}">{{ latest_batch.source_filename }}</span>
+            <span class="when-rel">{{ latest_batch.at|naturaltime }} · {{ latest_batch.model_name }}</span>
+          </div>
+          <div class="tiles">
+            <div class="tile">
+              <div class="k">Flows Tested</div>
+              <div class="v">{{ latest_batch.row_count }}</div>
             </div>
-            {% if last_run.is_manual %}
-              <div class="recent-verdict">
-                <span class="pill {% if last_run.is_attack %}is-attack{% else %}is-benign{% endif %}">
-                  <span class="dot"></span>{{ last_run.predicted_label }}
-                </span>
-                <span class="cell-note">{{ last_run.confidence|floatformat:4 }} confidence · {{ last_run.model_name }}</span>
-              </div>
-            {% else %}
-              <div class="recent-verdict">
-                <span class="filename" title="{{ last_run.source_filename }}">{{ last_run.source_filename }}</span>
-                <span class="cell-note">
-                  {{ last_run.row_count }} rows ·
-                  <span class="{% if last_run.attack_count %}attacks-hot{% endif %}">{{ last_run.attack_count }} attack{{ last_run.attack_count|pluralize }}</span>
-                  {% if last_run.was_evaluated %} · acc {{ last_run.accuracy|floatformat:4 }}{% endif %} · {{ last_run.model_name }}
-                </span>
+            <div class="tile {% if latest_batch.attack_count %}accent-critical{% endif %}">
+              <div class="k">Attacks Detected</div>
+              <div class="v">{{ latest_batch.attack_count }}</div>
+            </div>
+            <div class="tile">
+              <div class="k">Attack Classification Rate</div>
+              <div class="v">{{ latest_batch.attack_pct|floatformat:1 }}%</div>
+              <div class="s">share classified as an attack</div>
+            </div>
+            {% if latest_batch.was_evaluated %}
+              <div class="tile accent-good">
+                <div class="k">Accuracy (vs. labels)</div>
+                <div class="v">{{ latest_batch.accuracy|floatformat:4 }}</div>
+                <div class="s">macro F1 {{ latest_batch.macro_f1|floatformat:4 }}</div>
               </div>
             {% endif %}
           </div>
-          <a class="btn btn-ghost btn-sm" href="{% url 'history' %}" style="margin-top: 1rem;">View detection history</a>
+          {% if not latest_batch.was_evaluated %}
+            <p class="table-note">
+              This file had no ground-truth <code>Label</code> column, so accuracy was not computed —
+              the rate above is only the share of flows the model classified as an attack.
+            </p>
+          {% endif %}
+          <a class="btn btn-ghost btn-sm" href="{% url 'batch' %}" style="margin-top: 1rem;">Run another dataset test</a>
         {% else %}
           <p class="empty" style="padding: 1.5rem 1rem;">
-            No detections logged yet. Run a Flow Prediction or Dataset Test to populate this.
+            No dataset test logged yet. Use Dataset Testing to score a CSV or Parquet file.
           </p>
         {% endif %}
       </div>
     </div>
 
-    {# ---- Model comparison (analysis moved from the old landing page) ---- #}
+    {# ---- System status: live capture + model state ---- #}
     <div class="card">
       <div class="card-head">
-        <h2>Models</h2>
-        <p>scored on the same 200,498-row held-out set</p>
+        <h2>System status</h2>
+        <p>capture manager, model registry &amp; run log</p>
       </div>
       <div class="card-body">
-        <div class="model-rows">
-          {% for m in scorecards %}
-            <div class="model-row {% if m.is_default %}is-default{% endif %}">
-              <div class="model-row-head">
-                <span class="model-name">{{ m.name }}{% if m.is_default %} <span class="pill">Active</span>{% endif %}</span>
-                <span class="cell-note">macro F1 {{ m.macro_f1|floatformat:4 }}</span>
-              </div>
-              <div class="bar-track"><div class="bar-fill" style="width: {{ m.f1_pct|floatformat:2 }}%;"></div></div>
-            </div>
-          {% endfor %}
+        <div class="sys-status">
+          <div class="sys-status-row">
+            <span class="k">Live capture</span>
+            <span class="status-chip {% if live_running %}is-live{% elif capture_supported %}is-ready{% else %}is-off{% endif %}">
+              <span class="status-dot"></span>
+              {% if live_running %}Running{% elif capture_supported %}Ready{% else %}Offline{% endif %}
+            </span>
+          </div>
+          {% if live_running and live_snapshot %}
+            <div class="sys-status-note">{{ live_snapshot.flows }} flows · {{ live_snapshot.packets }} packets this session</div>
+          {% elif capture_supported %}
+            <div class="sys-status-note">Start monitoring from the Live Capture page.</div>
+          {% else %}
+            <div class="sys-status-note">Scapy / packet-capture privileges required.</div>
+          {% endif %}
         </div>
-        <p class="table-note">
-          Accuracy alone hides the rare classes, so macro F1 (all {{ class_count }} classes weighted
-          equally) decides the default. Switch model per prediction on any tool page.
-        </p>
+
+        <div class="tiles" style="margin-top: 1.1rem;">
+          <div class="tile by-family fam-bruteforce">
+            <div class="k">Active model</div>
+            <div class="v v-text">{{ active_model.name }}</div>
+            <div class="s">macro F1 {{ active_model.macro_f1|floatformat:4 }} · acc {{ active_model.accuracy|floatformat:4 }}</div>
+          </div>
+          <div class="tile">
+            <div class="k">Models available</div>
+            <div class="v">{{ model_count }}</div>
+            <div class="s">selectable per prediction</div>
+          </div>
+          <div class="tile">
+            <div class="k">Detection runs logged</div>
+            <div class="v">{{ history_total }}</div>
+            <div class="s">
+              {% if summary and summary.flows %}{{ summary.flows }} flows across all runs{% else %}Flow Prediction &amp; Dataset Testing{% endif %}
+            </div>
+          </div>
+        </div>
       </div>
+    </div>
+  </div>
+
+  {# ---- Recent detection (activity) ---- #}
+  <div class="card" style="margin-top: 1rem;">
+    <div class="card-head">
+      <h2>Recent detection</h2>
+      <p>most recent run in the log</p>
+    </div>
+    <div class="card-body">
+      {% if last_run %}
+        <div class="recent-run">
+          <div class="recent-when">
+            <span class="pill">{{ last_run.kind_display }}</span>
+            <span class="when-rel">{{ last_run.at|naturaltime }}</span>
+          </div>
+          {% if last_run.is_manual %}
+            <div class="recent-verdict">
+              <span class="pill {% if last_run.is_attack %}is-attack{% else %}is-benign{% endif %}">
+                <span class="dot"></span>{{ last_run.predicted_label }}
+              </span>
+              <span class="cell-note">{{ last_run.confidence|floatformat:4 }} confidence · {{ last_run.model_name }}</span>
+            </div>
+          {% else %}
+            <div class="recent-verdict">
+              <span class="filename" title="{{ last_run.source_filename }}">{{ last_run.source_filename }}</span>
+              <span class="cell-note">
+                {{ last_run.row_count }} rows ·
+                <span class="{% if last_run.attack_count %}attacks-hot{% endif %}">{{ last_run.attack_count }} attack{{ last_run.attack_count|pluralize }}</span>
+                {% if last_run.was_evaluated %} · acc {{ last_run.accuracy|floatformat:4 }}{% endif %} · {{ last_run.model_name }}
+              </span>
+            </div>
+          {% endif %}
+        </div>
+        <a class="btn btn-ghost btn-sm" href="{% url 'history' %}" style="margin-top: 1rem;">View detection history</a>
+      {% else %}
+        <p class="empty" style="padding: 1.5rem 1rem;">
+          No detections logged yet. Run a Flow Prediction or Dataset Test to populate this.
+        </p>
+      {% endif %}
     </div>
   </div>
 </section>
 
-{# ===================== Dataset & detection classes ===================== #}
-<section class="dash-section" aria-label="Detection classes">
+{# ===================== Secondary reference (lower priority) ===================== #}
+<section class="dash-section secondary-ref" aria-label="Reference">
   <div class="section-head">
-    <h2>What it detects</h2>
-    <p>{{ class_count }} classes — benign plus {{ class_count|add:"-1" }} attack types — grouped into six families.</p>
+    <span class="ref-label">Reference</span>
+    <p>Model comparison, detection classes, and the dataset behind the models.</p>
   </div>
 
-  <div class="family-grid">
-    {% for fam in families %}
-      <div class="family-card fam-{{ fam.key }}">
-        <h4><span class="swatch"></span>{{ fam.name }}</h4>
-        <p>{{ fam.blurb }}</p>
-        <div class="members">
-          {% for m in fam.members %}<code>{{ m }}</code>{% endfor %}
-        </div>
+  {# ---- Model comparison ---- #}
+  <div class="card">
+    <div class="card-head">
+      <h2>Models</h2>
+      <p>scored on the same 200,498-row held-out set</p>
+    </div>
+    <div class="card-body">
+      <div class="model-rows">
+        {% for m in scorecards %}
+          <div class="model-row {% if m.is_default %}is-default{% endif %}">
+            <div class="model-row-head">
+              <span class="model-name">{{ m.name }}{% if m.is_default %} <span class="pill">Active</span>{% endif %}</span>
+              <span class="cell-note">macro F1 {{ m.macro_f1|floatformat:4 }}</span>
+            </div>
+            <div class="bar-track"><div class="bar-fill" style="width: {{ m.f1_pct|floatformat:2 }}%;"></div></div>
+          </div>
+        {% endfor %}
       </div>
-    {% endfor %}
+      <p class="table-note">
+        Accuracy alone hides the rare classes, so macro F1 (all {{ class_count }} classes weighted
+        equally) decides the default. Switch model per prediction on any tool page.
+      </p>
+    </div>
   </div>
 
+  {# ---- Attack families ---- #}
+  <div class="card" style="margin-top: 1rem;">
+    <div class="card-head">
+      <h2>What it detects</h2>
+      <p>{{ class_count }} classes — benign plus {{ class_count|add:"-1" }} attack types — grouped into six families</p>
+    </div>
+    <div class="card-body">
+      <div class="family-grid">
+        {% for fam in families %}
+          <div class="family-card fam-{{ fam.key }}">
+            <h4><span class="swatch"></span>{{ fam.name }}</h4>
+            <p>{{ fam.blurb }}</p>
+            <div class="members">
+              {% for m in fam.members %}<code>{{ m }}</code>{% endfor %}
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  {# ---- Dataset facts ---- #}
   <div class="dataset-facts">
     <div><span class="df-n">481,793</span><span class="df-k">Labelled flows</span></div>
     <div><span class="df-n">{{ feature_count }}</span><span class="df-k">Selected features</span></div>
     <div><span class="df-n">{{ class_count }}</span><span class="df-k">Traffic classes</span></div>
-    <div><span class="df-n">98.0%</span><span class="df-k">Test accuracy</span></div>
+    <div><span class="df-n">98.0%</span><span class="df-k">Held-out test accuracy</span></div>
   </div>
 </section>
 

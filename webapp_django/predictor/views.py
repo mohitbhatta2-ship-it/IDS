@@ -48,6 +48,11 @@ def home(request):
 
     last_run = recent_runs[0] if recent_runs else None
 
+    # The most recent dataset (batch) run, shown as its own clearly-labelled
+    # panel so its numbers -- an attack-heavy file reads as ~100% "flagged as
+    # attack" -- are never mistaken for live-capture or accuracy figures.
+    latest_batch = next((r for r in recent_runs if not r.is_manual), None)
+
     # Live-capture status -- reflects the actual CaptureManager, if any.
     try:
         capture_supported = live_capture.capture_supported()
@@ -82,6 +87,7 @@ def home(request):
             "history_total": history_total,
             "summary": summary,
             "last_run": last_run,
+            "latest_batch": latest_batch,
         }
     )
     return render(request, "predictor/home.html", context)

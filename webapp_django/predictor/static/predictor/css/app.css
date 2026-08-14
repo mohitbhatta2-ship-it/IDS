@@ -726,3 +726,37 @@ tr.is-attack-row td { background: color-mix(in srgb, var(--critical) 5%, transpa
 
 /* A text value (e.g. the model name) must wrap rather than clip the tile. */
 .tile .v.v-text { font-size: 1.05rem; line-height: 1.25; white-space: normal; word-break: break-word; }
+
+/* ---------- Dashboard refinement: hierarchy + status ---------- */
+
+/* System-status block on the dashboard */
+.sys-status-row { display: flex; align-items: center; justify-content: space-between; gap: .6rem; }
+.sys-status-row .k { font-size: .82rem; font-weight: 600; color: var(--ink-2); }
+.sys-status-note { font-size: .78rem; color: var(--ink-muted); margin-top: .4rem; }
+
+/* Secondary reference — same flat design, lower visual priority. */
+.secondary-ref { margin-top: 2.5rem; padding-top: 1.4rem; border-top: 1px solid var(--line); }
+.secondary-ref .section-head { margin-bottom: .9rem; }
+.secondary-ref .section-head p { font-size: .82rem; }
+.ref-label {
+  display: inline-block; font-size: .7rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .09em; color: var(--ink-muted);
+}
+/* Recede the secondary cards against the primary surface. */
+.secondary-ref > .card { background: var(--surface-sunk); }
+.secondary-ref .card-head h2 { font-size: .95rem; }
+.secondary-ref .dataset-facts { margin-top: 1rem; }
+.secondary-ref .dataset-facts > div { background: var(--surface); }
+
+/* ---------- Live Capture: more prominent status + key stats ---------- */
+.live-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: .7rem; }
+.live-stat {
+  display: flex; flex-direction: column; gap: .35rem;
+  padding: .7rem .85rem; border-radius: var(--radius-sm);
+  background: var(--surface-sunk); border: 1px solid var(--border);
+}
+.live-stat .k { font-size: .68rem; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-muted); }
+.live-stat .v { font-size: 1.5rem; font-weight: 680; letter-spacing: -.02em; color: var(--ink); font-variant-numeric: tabular-nums; line-height: 1; }
+.live-stat.is-attack .v { color: var(--critical); }
+.live-stat-status { justify-content: space-between; }
+.live-stat-status .pill { align-self: flex-start; font-size: .82rem; padding: .2rem .6rem; }

@@ -68,12 +68,15 @@
         <button type="button" id="live-stop" class="btn btn-ghost" disabled>Stop</button>
       </div>
 
-      <div class="live-status" style="margin-top: 1.5rem;">
-        <span class="pill" id="live-state"><span class="dot"></span><span data-state-text>Idle</span></span>
-        <span class="pill"><span data-metric="packets">0</span>&nbsp;packets</span>
-        <span class="pill"><span data-metric="flows">0</span>&nbsp;flows</span>
-        <span class="pill is-attack"><span data-metric="attacks">0</span>&nbsp;attacks</span>
-        <span class="pill"><span data-metric="open">0</span>&nbsp;open</span>
+      <div class="live-stats" style="margin-top: 1.5rem;">
+        <div class="live-stat live-stat-status">
+          <span class="k">Status</span>
+          <span class="pill" id="live-state"><span class="dot"></span><span data-state-text>Idle</span></span>
+        </div>
+        <div class="live-stat"><span class="k">Packets</span><span class="v" data-metric="packets">0</span></div>
+        <div class="live-stat"><span class="k">Flows</span><span class="v" data-metric="flows">0</span></div>
+        <div class="live-stat is-attack"><span class="k">Attacks</span><span class="v" data-metric="attacks">0</span></div>
+        <div class="live-stat"><span class="k">Open flows</span><span class="v" data-metric="open">0</span></div>
       </div>
     </div>
   </div>
