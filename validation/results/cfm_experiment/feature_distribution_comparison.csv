@@ -1,0 +1,18 @@
+feature,in_model_features,cic_ftp_median,custom_real_ftp_median,cicflowmeter_real_ftp_median,cfm_closer_to_cic
+Flow Duration,True,4.0,1.0,3277591.0,custom
+TotLen Fwd Pkts,True,0.0,3.0,363.0,custom
+TotLen Bwd Pkts,True,0.0,10.0,466.0,custom
+Flow Pkts/s,True,476883.4777350773,1000000.0,3.9665889082546375,cicflowmeter
+Fwd Pkt Len Max,True,0.0,3.0,70.0,custom
+Fwd Pkt Len Mean,True,0.0,2.1666666666666665,60.41666666666667,custom
+Fwd Pkt Len Std,True,0.00018291944537668096,0.0,6.677075208003377,custom
+Bwd Pkt Len Max,True,0.0,10.0,88.0,custom
+Bwd Pkt Len Mean,True,0.0,3.3333333333333335,66.57142857142857,custom
+Fwd Seg Size Min,True,40.0,20.0,20.0,tie
+Init Fwd Win Byts,True,26883.0,8134.0,65535.0,custom
+Dst Port,True,21.0,21.0,21.0,tie
+Total Fwd Packets,False,,2.0,6.0,
+Total Bwd Packets,False,,2.0,7.0,
+Flow Bytes/s,False,,,252.9302406956981,
+Fwd Pkt Len Min,False,,,54.0,
+Bwd Pkt Len Min,False,,,54.0,

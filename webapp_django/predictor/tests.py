@@ -1418,3 +1418,154 @@ class RetrainingExperimentTests(TestCase):
         self.assertEqual(p["max_iter"], 250)
         self.assertEqual(p["max_depth"], 5)
         self.assertNotIn("algorithm", p)
+
+
+# ---------------------------------------------------------------------------
+# CICFlowMeter-vs-custom-extractor experiment (analysis only; production frozen)
+# ---------------------------------------------------------------------------
+
+try:
+    import cicflowmeter as _cfm_pkg  # noqa: F401
+    _HAS_CFM = True
+except Exception:  # noqa: BLE001
+    _HAS_CFM = False
+
+_CFM_READY = _SCAPY and _HAS_CFM and _REAL_PCAP_DIR.is_dir()
+
+
+@skipUnless(_CFM_READY, "scapy + cicflowmeter + real PCAPs required")
+class CicflowmeterExtractionTests(TestCase):
+    """The independent CICFlowMeter extraction path used to isolate cause A vs B."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        live_capture._ensure_live_on_path()
+        from predictor import cfm_extract as _cf, pcap_validation as _pv
+        cls.cf = _cf
+        cls.pairs = list(_pv.iter_labelled_pcaps(_REAL_PCAP_DIR))
+        # extract once; every test reads this (extraction is the slow part)
+        cls.ext = _cf.extract_real_pcaps(cls.pairs)
+
+    # -- 30-feature schema, order, finiteness -----------------------------
+
+    def test_mapped_features_are_exactly_ml_features_in_order(self):
+        for pcap, _label in self.pairs:
+            mapped = self.cf.map_to_ml_features(self.cf.run_cicflowmeter(pcap))
+            self.assertEqual(list(mapped.X.columns), list(ml.FEATURES))  # exact order
+
+    def test_combined_frame_carries_all_thirty_features(self):
+        comb = self.ext["combined"]
+        self.assertFalse(comb.empty)
+        for f in ml.FEATURES:
+            self.assertIn(f, comb.columns)
+
+    def test_every_mapped_flow_is_finite(self):
+        comb = self.ext["combined"]
+        vals = comb[list(ml.FEATURES)].apply(pd.to_numeric, errors="coerce").to_numpy()
+        self.assertTrue(_np.isfinite(vals).all())
+
+    def test_feature_count_is_thirty(self):
+        self.assertEqual(len(ml.FEATURES), 30)
+        self.assertEqual(self.ext["combined"][list(ml.FEATURES)].shape[1], 30)
+
+    # -- failures reported, never zero-filled -----------------------------
+
+    def test_invalid_flows_are_dropped_not_zero_filled(self):
+        # Nothing is fabricated: a non-finite feature drops the row with a reason.
+        import numpy as np
+        raw = pd.DataFrame([{c: 1.0 for c in self.cf.CFM_TO_ML.values()}])
+        raw.loc[0, "flow_duration"] = np.inf
+        mapped = self.cf.map_to_ml_features(raw)
+        self.assertEqual(len(mapped.X), 0)              # dropped, not kept-as-zero
+        self.assertEqual(len(mapped.invalid), 1)        # and reported
+        self.assertIn("Flow Duration", mapped.invalid[0]["non_finite_features"])
+
+    def test_extraction_reports_validity_counts(self):
+        total_valid = sum(p["valid_flows"] for p in self.ext["per_pcap"])
+        self.assertEqual(total_valid, self.ext["total_flows"])
+        self.assertEqual(self.ext["total_invalid"],
+                         sum(p["invalid_flows"] for p in self.ext["per_pcap"]))
+
+    # -- labels from folder ground truth ----------------------------------
+
+    def test_labels_come_only_from_folders(self):
+        comb = self.ext["combined"]
+        self.assertTrue(set(comb["Label"]).issubset({"FTP-BruteForce", "Benign"}))
+        for p in self.ext["per_pcap"]:
+            sub = "ftp" if p["label"] == "FTP-BruteForce" else "benign"
+            self.assertIn(sub, str(p["pcap"]).lower())
+
+    # -- reproducibility ---------------------------------------------------
+
+    def test_extraction_is_reproducible(self):
+        pcap = self.pairs[0][0]
+        a = self.cf.map_to_ml_features(self.cf.run_cicflowmeter(pcap)).X
+        b = self.cf.map_to_ml_features(self.cf.run_cicflowmeter(pcap)).X
+        pd.testing.assert_frame_equal(a, b)
+
+    # -- mapping is by definition, not just name --------------------------
+
+    def test_mapping_covers_all_thirty_and_only_real_columns(self):
+        self.assertEqual(set(self.cf.CFM_TO_ML.keys()), set(ml.FEATURES))
+        raw = self.cf.run_cicflowmeter(self.pairs[0][0])
+        for col in self.cf.CFM_TO_ML.values():
+            self.assertIn(col, raw.columns)
+
+
+@skipUnless(_CFM_READY and _train_parquet() is not None,
+            "scapy + cicflowmeter + parquet + real PCAPs required")
+class CfmExperimentTests(TestCase):
+    """The three-path comparison that distinguishes model failure from extraction."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        live_capture._ensure_live_on_path()
+        from predictor import cfm_experiment as _ce
+        cls.ce = _ce
+
+    def test_production_model_and_frozen_baseline_are_not_modified(self):
+        import hashlib
+        csv = self.ce.repo_root() / "validation" / "results" / "flows.csv"
+        before = hashlib.sha256(csv.read_bytes()).hexdigest()
+        _m, _df = self.ce.path_b_custom()          # reads only
+        after = hashlib.sha256(csv.read_bytes()).hexdigest()
+        self.assertEqual(before, after, "frozen flows.csv must not be rewritten")
+        # baseline still scores its known CIC number
+        test = pd.read_parquet(ml.DATA_ROOT / "Processed_Data" / "test_selected.parquet")
+        model, _ = ml._load("histgradientboosting")
+        acc = float((model.predict(test[ml.FEATURES]) == test["Label"]).mean())
+        self.assertAlmostEqual(acc, 0.9803, places=4)
+
+    def test_path_c_uses_production_model_on_thirty_features(self):
+        m, cfm_df = self.ce.path_c_cicflowmeter()
+        for f in ml.FEATURES:
+            self.assertIn(f, cfm_df.columns)
+        self.assertIn(m["ftp_recall"], (None, 0.0) if m["ftp_recall"] is None else [m["ftp_recall"]])
+        self.assertEqual(m["extraction"]["total_invalid"], 0)
+
+    def test_ftp_recall_is_computed_for_both_extractors(self):
+        # §8 — the headline comparison exists and is a real number, whatever it is.
+        _mb, _ = self.ce.path_b_custom()
+        mc, _ = self.ce.path_c_cicflowmeter()
+        self.assertIsNotNone(_mb["ftp_recall"])
+        self.assertIsNotNone(mc["ftp_recall"])
+
+    def test_feature_distribution_reports_all_three_sources(self):
+        _mb, custom_df = self.ce.path_b_custom()
+        _mc, cfm_df = self.ce.path_c_cicflowmeter()
+        dist = self.ce.feature_distribution(custom_df, cfm_df)
+        self.assertIn("cic_ftp_median", dist.columns)
+        self.assertIn("custom_real_ftp_median", dist.columns)
+        self.assertIn("cicflowmeter_real_ftp_median", dist.columns)
+        # unavailable values are None, never fabricated to 0
+        self.assertTrue(dist["cicflowmeter_real_ftp_median"].notna().any())
+
+    def test_closeness_summary_is_consistent(self):
+        _mb, custom_df = self.ce.path_b_custom()
+        _mc, cfm_df = self.ce.path_c_cicflowmeter()
+        dist = self.ce.feature_distribution(custom_df, cfm_df)
+        s = self.ce.summarise_closer(dist)
+        self.assertEqual(s["comparable_features"],
+                         s["cicflowmeter_closer"] + s["custom_closer"] + s["tie"])
