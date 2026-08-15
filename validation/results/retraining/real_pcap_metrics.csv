@@ -1,0 +1,4 @@
+model,real_accuracy,real_macro_f1,real_macro_precision,real_macro_recall,real_weighted_f1,real_ftp_recall,real_benign_recall,real_n
+"baseline (all 42 flows, self-scored)",0.19047619047619047,0.16,0.09523809523809523,0.5,0.06095238095238095,0.0,1.0,
+candidate_C (LOGO held-out),0.9047619047619048,0.8585858585858586,,,,0.9117647058823529,0.875,42.0
+"candidate_B (LOGO held-out FTP, unweighted)",,,,,,0.8823529411764706,,34.0

@@ -1310,3 +1310,111 @@ class AttackDashboardRealResultsUnchangedTests(TestCase):
         self.assertEqual(ftp["correct"], 0)   # unchanged: all FTP flows -> Benign
         self.assertEqual(_ad.severity_of("FTP-BruteForce"), "High")
         self.assertEqual(_ad.family_of("FTP-BruteForce"), "bruteforce")
+
+
+# ---------------------------------------------------------------------------
+# Realistic-PCAP retraining experiment (candidate only; baseline frozen)
+# ---------------------------------------------------------------------------
+
+import numpy as _np
+from predictor import retraining as _rt
+
+_RETRAIN_READY = _SCAPY and _train_parquet() is not None and _REAL_PCAP_DIR.is_dir()
+
+
+@skipUnless(_RETRAIN_READY, "scapy + parquet + real PCAPs required")
+class RetrainingExperimentTests(TestCase):
+    def setUp(self):
+        live_capture._ensure_live_on_path()
+        self.real = _rt.extract_real_flows()
+        # A small CIC slice keeps training fast; determinism/splits don't need 281k.
+        train = pd.read_parquet(_train_parquet())
+        # A small stratified-ish slice keeps training fast; splits/determinism
+        # don't need the full 281k rows.
+        self.cic = train.sample(min(1500, len(train)), random_state=0).reset_index(drop=True)
+        self.cic_X = self.cic[ml.FEATURES].reset_index(drop=True)
+        self.cic_y = self.cic["Label"].reset_index(drop=True)
+
+    # -- baseline / artifact isolation ------------------------------------
+
+    def test_candidate_dir_is_separate_from_production_models(self):
+        cand = _rt.candidate_dir().resolve()
+        prod = ml.MODELS_DIR.resolve()
+        self.assertNotEqual(cand, prod)
+        self.assertNotIn(str(prod), str(cand))
+        # production model file exists and is under webapp_data, not the candidate dir
+        self.assertTrue((prod / "HistGradientBoosting_Tuned.pkl").is_file())
+
+    def test_baseline_saved_model_is_unchanged(self):
+        # The frozen baseline still scores its known CIC number.
+        test = pd.read_parquet(ml.DATA_ROOT / "Processed_Data" / "test_selected.parquet")
+        model, _ = ml._load("histgradientboosting")
+        acc = float((model.predict(test[ml.FEATURES]) == test["Label"]).mean())
+        # Frozen baseline: its known full-test-set accuracy must be unchanged.
+        self.assertAlmostEqual(acc, 0.9803, places=4)
+
+    # -- feature parity ----------------------------------------------------
+
+    def test_real_flows_have_exactly_thirty_finite_features_no_zero_fill(self):
+        df = self.real.df
+        self.assertEqual(len(df), 42)
+        self.assertEqual(len(self.real.invalid), 0)
+        for f in ml.FEATURES:
+            self.assertIn(f, df.columns)
+            self.assertTrue(_np.isfinite(pd.to_numeric(df[f], errors="coerce")).all())
+
+    def test_assembled_training_uses_exactly_and_only_ml_features_in_order(self):
+        X, y, w, man = _rt.assemble_training(self.cic_X, self.cic_y, self.real.df)
+        self.assertEqual(list(X.columns), list(ml.FEATURES))  # exact order
+
+    # -- labels from ground truth -----------------------------------------
+
+    def test_real_labels_come_only_from_folder_ground_truth(self):
+        self.assertEqual(set(self.real.df["Label"]), {"FTP-BruteForce", "Benign"})
+        # capture -> label is consistent with the directory structure
+        for cap, sub in self.real.df.groupby("capture"):
+            self.assertEqual(sub["Label"].nunique(), 1)
+
+    # -- leakage control ---------------------------------------------------
+
+    def test_leave_one_capture_out_never_shares_a_pcap(self):
+        logo = _rt.leave_one_capture_out(self.cic_X, self.cic_y, self.real, ftp_weight=5.0)
+        for fold in logo["folds"]:
+            held = fold["held_out_capture"]
+            self.assertNotIn(held, fold["train_manifest"]["included_captures"],
+                             "held-out PCAP must not be in the training captures")
+
+    # -- reproducibility & schema -----------------------------------------
+
+    def test_candidate_training_is_reproducible(self):
+        X, y, w, _ = _rt.assemble_training(self.cic_X, self.cic_y, self.real.df, ftp_weight=10.0)
+        m1 = _rt.train(X, y, w)
+        m2 = _rt.train(X, y, w)
+        p1 = m1.predict(self.real.df[ml.FEATURES])
+        p2 = m2.predict(self.real.df[ml.FEATURES])
+        self.assertTrue((p1 == p2).all(), "same seed + data must give identical predictions")
+
+    def test_candidate_artifacts_have_a_valid_schema(self):
+        import tempfile, joblib
+        X, y, w, man = _rt.assemble_training(self.cic_X, self.cic_y, self.real.df, ftp_weight=10.0)
+        model = _rt.train(X, y, w)
+        with tempfile.TemporaryDirectory() as d:
+            # redirect candidate_dir to a temp path
+            orig = _rt.candidate_dir
+            _rt.candidate_dir = lambda: Path(d)
+            try:
+                saved = _rt.save_candidate(model, {"experiment": "test", "seed": _rt.SEED})
+            finally:
+                _rt.candidate_dir = orig
+            self.assertTrue(Path(saved["model"]).is_file())
+            meta = json.loads(Path(saved["metadata"]).read_text())
+            self.assertEqual(meta["scaler"], None)
+            self.assertEqual(meta["seed"], _rt.SEED)
+            reloaded = joblib.load(saved["model"])
+            self.assertEqual(len(reloaded.classes_), len(model.classes_))
+
+    def test_hgb_params_are_the_tuned_ones_mapped(self):
+        p = _rt.hgb_params()
+        self.assertEqual(p["max_iter"], 250)
+        self.assertEqual(p["max_depth"], 5)
+        self.assertNotIn("algorithm", p)

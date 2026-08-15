@@ -1,0 +1,3 @@
+model,Benign,FTP-BruteForce
+baseline_real,42,
+candidate_C_logo,10,32.0

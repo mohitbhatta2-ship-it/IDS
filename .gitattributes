@@ -1,2 +1,5 @@
 *.pkl filter=lfs diff=lfs merge=lfs -text
 *.parquet filter=lfs diff=lfs merge=lfs -text
+
+# Experimental candidate model: store as a normal blob (LFS push is not available here)
+validation/models/realistic_pcap_candidate/model.pkl !filter !diff !merge
