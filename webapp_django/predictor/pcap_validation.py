@@ -112,6 +112,10 @@ class _CollectingSession(live_capture.CaptureSession):
                 "dst_port": flow.dst_port,
                 "protocol": {6: "TCP", 17: "UDP"}.get(flow.protocol, str(flow.protocol)),
                 "packets": flow.total_packets,
+                # Direction counts are NOT model features; kept only for the
+                # descriptive FTP investigation (Total Fwd/Bwd Packets).
+                "fwd_packets": flow.forward_packets,
+                "bwd_packets": flow.backward_packets,
                 "features": features,
             }
         )
@@ -213,7 +217,8 @@ def validate_pcap(path, label: str, model_key: str = ml.DEFAULT_MODEL) -> PcapRe
             continue
         row = {f: float(fl["features"][f]) for f in ml.FEATURES}
         row.update(SrcIP=fl["src_ip"], SrcPort=fl["src_port"], DstIP=fl["dst_ip"],
-                   DstPort=fl["dst_port"], Protocol=fl["protocol"], Packets=fl["packets"])
+                   DstPort=fl["dst_port"], Protocol=fl["protocol"], Packets=fl["packets"],
+                   FwdPackets=fl["fwd_packets"], BwdPackets=fl["bwd_packets"])
         valid_rows.append(row)
 
     result.valid_flows = len(valid_rows)
@@ -235,7 +240,8 @@ def validate_pcap(path, label: str, model_key: str = ml.DEFAULT_MODEL) -> PcapRe
         )
 
     scored = batch["frame"].reset_index(drop=True)
-    meta = df[["SrcIP", "SrcPort", "DstIP", "DstPort", "Protocol", "Packets"]].reset_index(drop=True)
+    meta = df[["SrcIP", "SrcPort", "DstIP", "DstPort", "Protocol",
+               "Packets", "FwdPackets", "BwdPackets"]].reset_index(drop=True)
     result.frame = pd.concat([meta, scored], axis=1)
     result.evaluation = batch["evaluation"]
     return result
@@ -385,6 +391,39 @@ COMPARISON_FEATURES = [
 ]
 
 
+def descriptive_stats(combined: pd.DataFrame) -> pd.DataFrame:
+    """
+    Per-class descriptive stats for the FTP investigation, including quantities
+    that are NOT among the 30 model features and so cannot be compared to CIC:
+    Total Fwd/Bwd Packets and Flow Bytes/s (derived from the model features
+    TotLen Fwd/Bwd Pkts and Flow Duration). These are reported for the real
+    captures only, never fed to the model.
+    """
+    if combined is None or combined.empty:
+        return pd.DataFrame()
+    df = combined.copy()
+    dur_s = pd.to_numeric(df["Flow Duration"], errors="coerce") / 1_000_000.0
+    total_bytes = pd.to_numeric(df["TotLen Fwd Pkts"], errors="coerce") + \
+        pd.to_numeric(df["TotLen Bwd Pkts"], errors="coerce")
+    df["Flow Bytes/s (derived)"] = total_bytes / dur_s.replace(0, float("nan"))
+
+    rows = []
+    for cls in sorted(df["Label"].unique()):
+        s = df[df["Label"] == cls]
+        rows.append({
+            "class": cls,
+            "flows": int(len(s)),
+            "median Flow Duration (us)": float(pd.to_numeric(s["Flow Duration"], errors="coerce").median()),
+            "median Total Fwd Packets": float(pd.to_numeric(s["FwdPackets"], errors="coerce").median()),
+            "median Total Bwd Packets": float(pd.to_numeric(s["BwdPackets"], errors="coerce").median()),
+            "median TotLen Fwd Pkts": float(pd.to_numeric(s["TotLen Fwd Pkts"], errors="coerce").median()),
+            "median TotLen Bwd Pkts": float(pd.to_numeric(s["TotLen Bwd Pkts"], errors="coerce").median()),
+            "median Flow Pkts/s": float(pd.to_numeric(s["Flow Pkts/s"], errors="coerce").median()),
+            "median Flow Bytes/s (derived)": float(s["Flow Bytes/s (derived)"].median()),
+        })
+    return pd.DataFrame(rows)
+
+
 def feature_distribution_comparison(combined: pd.DataFrame, features=None) -> pd.DataFrame:
     """
     For each validated class, compare real-pcap feature medians against the CIC
@@ -451,6 +490,12 @@ def save_results(summary: dict, out_dir) -> dict:
         p = out / "feature_distribution.csv"
         dist.to_csv(p, index=False)
         written["distribution_csv"] = str(p)
+
+    desc = summary.get("descriptive")
+    if desc is not None and not desc.empty:
+        p = out / "descriptive_stats.csv"
+        desc.to_csv(p, index=False)
+        written["descriptive_csv"] = str(p)
 
     # A single JSON with everything scalar/serialisable.
     payload = {

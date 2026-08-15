@@ -86,6 +86,46 @@ writes `validation/results/`:
 - `feature_distribution.csv` — real vs CIC medians per class/feature
 - `summary.json` — accuracy, macro/weighted-F1, per-class, confusion, per-pcap counts, CIC baseline
 
+## Reproduce the committed real-capture baseline
+
+Real captures from our controlled WSL environment (Windows `172.24.48.1` ↔ WSL
+vsftpd `172.24.60.225:21`) live in `sample_data/real_pcap/`:
+
+```
+sample_data/real_pcap/benign/{benign_01,benign_03}.pcap          -> Benign  (230 Login successful)
+sample_data/real_pcap/ftp_bruteforce/{ftp_01,ftp_02,ftp_03}.pcap -> FTP-BruteForce (repeated USER/PASS -> 530)
+```
+
+Run the whole baseline (from `webapp_django/`):
+
+```bash
+python manage.py validate_pcaps \
+    --input ../sample_data/real_pcap \
+    --output ../validation/results \
+    --compare-cic
+```
+
+Committed result (`validation/results/`), existing model, no retraining:
+
+| | Flows | Benign correct | FTP-BruteForce correct | Accuracy | Macro-F1 |
+|---|---|---|---|---|---|
+| **Real capture** | 42 | 8 / 8 | **0 / 34** | 0.190 | 0.160 |
+| **CIC held-out (Dataset Testing)** | 40,000 | — | — | 0.980 | 0.883 |
+
+Confusion matrix: every FTP-BruteForce flow → Benign. The model does **not**
+generalise to real FTP brute force (0 % recall), while remaining healthy on CIC.
+
+**Flow counts.** The pipeline (identical to Live Capture) produces ~2 flows per
+FTP connection: one substantive login flow (6–21 packets, median duration
+~3.1 s) and one short post-FIN residual flow (1–2 packets). Both are classified
+Benign. This residual-flow behaviour mirrors Live Capture and is left unchanged.
+
+**Why Benign.** The real substantive FTP login flow is a multi-second, low-rate,
+small-payload connection (median Flow Duration ~3.1 s, Flow Pkts/s ~3.8,
+TotLen Fwd ~27 B). The CIC FTP-BruteForce class is the opposite — a ~4 µs,
+zero-payload, ~225 k pkts/s artifact. The two occupy completely different
+feature regions, so a correctly-extracted real login lands in Benign.
+
 ## Ground truth & leakage
 
 - Ground truth is the capture's label, never the model's prediction.

@@ -56,6 +56,7 @@ class Command(BaseCommand):
 
         if summary.get("combined") is not None:
             summary["distribution"] = pv.feature_distribution_comparison(summary["combined"])
+            summary["descriptive"] = pv.descriptive_stats(summary["combined"])
 
         self._report(summary)
 
@@ -122,3 +123,14 @@ class Command(BaseCommand):
             w(f"  {'class':22}{'feature':20}{'real':>16}{'CIC':>16}")
             for _, d in dist.iterrows():
                 w(f"  {d['class']:22}{d['feature']:20}{d['real_median']:16.3f}{d['cic_median']:16.3f}")
+
+        desc = summary.get("descriptive")
+        if desc is not None and not desc.empty:
+            w(self.style.MIGRATE_HEADING(
+                "\nDescriptive stats (real captures only; packet counts & Flow Bytes/s "
+                "are NOT model features, so no CIC comparison)"))
+            for _, d in desc.iterrows():
+                w(f"  {d['class']:16} flows={int(d['flows']):3} "
+                  f"FlowDur(us)~{d['median Flow Duration (us)']:.0f} "
+                  f"FwdPkts~{d['median Total Fwd Packets']:.0f} BwdPkts~{d['median Total Bwd Packets']:.0f} "
+                  f"Flow Pkts/s~{d['median Flow Pkts/s']:.1f} Flow Bytes/s~{d['median Flow Bytes/s (derived)']:.1f}")

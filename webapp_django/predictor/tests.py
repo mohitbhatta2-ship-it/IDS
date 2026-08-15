@@ -1074,3 +1074,56 @@ class PcapValidationTests(TestCase):
         payload = _json.loads((out / "summary.json").read_text())
         self.assertIn("metrics", payload)
         self.assertIn("per_pcap", payload)
+
+
+# ---------------------------------------------------------------------------
+# Real committed PCAPs (sample_data/real_pcap/) — end-to-end parity + baseline
+# ---------------------------------------------------------------------------
+
+_REAL_PCAP_DIR = _P2(__file__).resolve().parents[2] / "sample_data" / "real_pcap"
+
+
+@skipUnless(_SCAPY and _REAL_PCAP_DIR.is_dir(), "real PCAPs not present")
+class RealPcapValidationTests(TestCase):
+    """Runs the actual captured FTP/benign PCAPs through the pipeline."""
+
+    def setUp(self):
+        live_capture._ensure_live_on_path()
+
+    def test_every_real_flow_has_exactly_thirty_finite_features(self):
+        seen = 0
+        for pcap, _label in _pv.iter_labelled_pcaps(_REAL_PCAP_DIR):
+            for fl in _pv.replay_pcap(pcap):
+                seen += 1
+                self.assertIsNone(_pv._feature_problem(fl["features"]),
+                                  f"{pcap.name}: {_pv._feature_problem(fl['features'])}")
+                self.assertEqual(set(fl["features"]), set(ml.FEATURES))
+        self.assertGreater(seen, 0, "expected flows from the real captures")
+
+    def test_ground_truth_comes_from_the_folder_not_the_model(self):
+        labels = {label for _p, label in _pv.iter_labelled_pcaps(_REAL_PCAP_DIR)}
+        self.assertIn("FTP-BruteForce", labels)
+        self.assertIn("Benign", labels)
+
+    def test_real_validation_runs_with_no_invalid_flows(self):
+        summary = _pv.validate_directory(_REAL_PCAP_DIR)
+        self.assertGreater(summary["flows"], 0)
+        self.assertEqual(summary["invalid_flows"], 0, "no flow should be invalid/zero-filled")
+        # Benign successful-login sessions are recognised as Benign.
+        benign = next(r for r in summary["metrics"]["per_class"] if r["class"] == "Benign")
+        self.assertEqual(benign["correct"], benign["ground_truth"])
+
+    def test_real_ftp_bruteforce_baseline_is_classified_benign(self):
+        """
+        Honest baseline (NOT a target): the existing model classifies the real
+        FTP brute-force flows as Benign, because real FTP traffic is far from the
+        CIC FTP-BruteForce artifact distribution. This locks the measured baseline
+        so a future retrain is visibly different.
+        """
+        summary = _pv.validate_directory(_REAL_PCAP_DIR)
+        ftp = next(r for r in summary["metrics"]["per_class"] if r["class"] == "FTP-BruteForce")
+        self.assertGreater(ftp["ground_truth"], 0)
+        self.assertEqual(ftp["correct"], 0, "current model detects none of the real FTP flows")
+        # And the model itself is unchanged / healthy on CIC data.
+        cic = _pv.cic_dataset_testing_metrics(sample=5000)
+        self.assertGreater(cic["accuracy"], 0.9)

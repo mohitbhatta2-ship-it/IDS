@@ -28,10 +28,19 @@ Folder → class mapping: `benign → Benign`, `ftp_bruteforce → FTP-BruteForc
 Run it (from `webapp_django/`):
 
 ```bash
+# committed real captures live in sample_data/real_pcap/
+python manage.py validate_pcaps --input ../sample_data/real_pcap --output ../validation/results --compare-cic
+
+# your own drop-in captures under validation/pcaps/
 python manage.py validate_pcaps --input ../validation/pcaps --output ../validation/results --compare-cic
+
 # or a single capture:
-python manage.py validate_pcaps --pcap ../validation/pcaps/ftp_bruteforce/s1.pcap --label FTP-BruteForce
+python manage.py validate_pcaps --pcap ../sample_data/real_pcap/ftp_bruteforce/ftp_01.pcap --label FTP-BruteForce
 ```
+
+**Currently validated classes:** Benign, FTP-BruteForce (real captures present).
+**Not yet validated:** SSH-Bruteforce, DoS/HTTP — no real captures available yet
+(drop them into the matching folder to validate; no fake PCAPs are created).
 
 Full, safety-first instructions: [`docs/real-pcap-validation.md`](../docs/real-pcap-validation.md).
 
