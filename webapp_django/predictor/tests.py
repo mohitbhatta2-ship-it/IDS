@@ -933,3 +933,144 @@ class TrainingArtifactEvidenceTests(TestCase):
         # These are the artifact signatures a real login (payload + ~100 ms) can't match.
         self.assertGreater(zero_payload, 0.9, "expected ~100% zero forward payload")
         self.assertGreater(micro, 0.9, "expected ~100% sub-millisecond duration")
+
+
+# ---------------------------------------------------------------------------
+# Real-PCAP validation workflow (Phase 7 feature-parity tests)
+#
+# Reuse the diagnostic flow builders above; verify the PCAP path is the same
+# flow construction / features / preprocessing as Live Capture + Dataset Testing.
+# ---------------------------------------------------------------------------
+
+import tempfile as _tempfile
+from pathlib import Path as _P2
+
+from predictor import pcap_validation as _pv
+
+
+def _write_ftp_pcap(path, attempts=4):
+    """A small realistic FTP brute-force capture (each attempt a closed TCP conn)."""
+    from scapy.layers.inet import IP, TCP
+    from scapy.packet import Raw
+    from scapy.utils import wrpcap
+    CLI, SRV = "172.24.48.1", "172.24.60.225"
+    pkts = []
+    for i in range(attempts):
+        sp, dp, t = 54000 + i, 21, 1_530_000_000.0 + i
+        script = [
+            (CLI, SRV, "S", 0, 0.0), (SRV, CLI, "SA", 0, .0004), (CLI, SRV, "A", 0, .0002),
+            (SRV, CLI, "PA", 20, .01), (CLI, SRV, "PA", 12, .03), (SRV, CLI, "PA", 34, .012),
+            (CLI, SRV, "PA", 20, .045), (SRV, CLI, "PA", 22, .02), (CLI, SRV, "FA", 0, .015),
+            (SRV, CLI, "FA", 0, .004),
+        ]
+        for src, dst, fl, pl, dt in script:
+            t += dt
+            spt, dpt = (sp, dp) if src == CLI else (dp, sp)
+            p = IP(src=src, dst=dst) / TCP(sport=spt, dport=dpt, flags=fl, window=64240)
+            if pl:
+                p = p / Raw(b"x" * pl)
+            p.time = t
+            pkts.append(p)
+    wrpcap(str(path), pkts)
+    return attempts
+
+
+@skipUnless(_SCAPY, "scapy is required for PCAP validation tests")
+class PcapValidationTests(TestCase):
+    def setUp(self):
+        live_capture._ensure_live_on_path()
+        self._dir = _tempfile.TemporaryDirectory()
+        self.addCleanup(self._dir.cleanup)
+        self.root = _P2(self._dir.name)
+
+    # -- flow construction / feature parity --------------------------------
+
+    def test_pcap_flows_produce_exactly_the_thirty_features_finite(self):
+        pcap = self.root / "s1.pcap"
+        n = _write_ftp_pcap(pcap, attempts=4)
+        flows = _pv.replay_pcap(pcap)
+        self.assertEqual(len(flows), n, "each closed FTP attempt is one finalized flow")
+        for fl in flows:
+            # exactly ml.FEATURES, in order, all finite -> no problem reported.
+            self.assertIsNone(_pv._feature_problem(fl["features"]))
+            self.assertEqual(list(fl["features"].keys()) and set(fl["features"]), set(ml.FEATURES))
+
+    def test_missing_or_extra_or_nonfinite_features_are_rejected_not_zero_filled(self):
+        good = {f: 0.0 for f in ml.FEATURES}
+        self.assertIsNone(_pv._feature_problem(good))
+        self.assertIn("missing", _pv._feature_problem({f: 0.0 for f in ml.FEATURES[:-1]}))
+        self.assertIn("unexpected", _pv._feature_problem({**good, "Bogus": 1.0}))
+        self.assertIn("non-finite", _pv._feature_problem({**good, "Flow Duration": float("inf")}))
+
+    def test_bidirectional_and_finalization_match_live_capture(self):
+        # One FTP attempt has fwd + reverse packets -> a single flow, Dst Port 21,
+        # finalized by FIN during replay (no flush needed for a closed conn).
+        pcap = self.root / "one.pcap"
+        _write_ftp_pcap(pcap, attempts=1)
+        flows = _pv.replay_pcap(pcap)
+        self.assertEqual(len(flows), 1)
+        self.assertEqual(flows[0]["dst_port"], 21)
+        self.assertEqual(flows[0]["protocol"], "TCP")
+        self.assertEqual(flows[0]["packets"], 10)
+
+    # -- preprocessing / prediction parity with Dataset Testing -------------
+
+    def test_pcap_prediction_path_matches_predict_one(self):
+        pcap = self.root / "s.pcap"
+        _write_ftp_pcap(pcap, attempts=3)
+        res = _pv.validate_pcap(pcap, "FTP-BruteForce")
+        self.assertEqual(res.valid_flows, 3)
+        self.assertEqual(len(res.invalid_flows), 0)
+        # Every row's pcap-path prediction equals predict_one on the same vector.
+        flows = _pv.replay_pcap(pcap)
+        for fl, (_, row) in zip(flows, res.frame.iterrows()):
+            one = ml.predict_one(fl["features"], res.model_key)
+            self.assertEqual(one["label"], row["Predicted Class"])
+            self.assertAlmostEqual(one["confidence"], float(row["Confidence"]), places=6)
+
+    def test_ground_truth_is_the_label_never_the_prediction(self):
+        pcap = self.root / "s.pcap"
+        _write_ftp_pcap(pcap, attempts=4)
+        res = _pv.validate_pcap(pcap, "FTP-BruteForce")
+        # Ground truth column is the capture label for every flow...
+        self.assertTrue((res.frame["Label"] == "FTP-BruteForce").all())
+        # ...and is independent of what the model predicted.
+        self.assertIn("Predicted Class", res.frame.columns)
+        self.assertEqual(res.correct + res.incorrect, res.valid_flows)
+
+    # -- labels / directory ------------------------------------------------
+
+    def test_resolve_label_aliases_exact_and_errors(self):
+        self.assertEqual(_pv.resolve_label("ftp_bruteforce"), "FTP-BruteForce")
+        self.assertEqual(_pv.resolve_label("ssh"), "SSH-Bruteforce")
+        self.assertEqual(_pv.resolve_label("DoS attacks-Hulk"), "DoS attacks-Hulk")
+        with self.assertRaises(_pv.ValidationError):
+            _pv.resolve_label("dos")          # ambiguous: must name the DoS class
+        with self.assertRaises(_pv.ValidationError):
+            _pv.resolve_label("not-a-class")
+
+    def test_validate_directory_infers_labels_and_keeps_sessions_separate(self):
+        (self.root / "ftp_bruteforce").mkdir()
+        (self.root / "benign").mkdir()
+        _write_ftp_pcap(self.root / "ftp_bruteforce" / "a.pcap", attempts=2)
+        _write_ftp_pcap(self.root / "benign" / "b.pcap", attempts=2)  # content irrelevant; label = folder
+        summary = _pv.validate_directory(self.root)
+        labels = {r.label for r in summary["per_pcap"]}
+        self.assertEqual(labels, {"FTP-BruteForce", "Benign"})
+        self.assertEqual(len(summary["per_pcap"]), 2, "one result per pcap/session")
+        self.assertIsNotNone(summary["metrics"])
+        self.assertIsNotNone(summary["confusion"])
+
+    def test_results_are_written_as_csv_and_json(self):
+        (self.root / "ftp_bruteforce").mkdir()
+        _write_ftp_pcap(self.root / "ftp_bruteforce" / "a.pcap", attempts=3)
+        summary = _pv.validate_directory(self.root)
+        out = self.root / "results"
+        written = _pv.save_results(summary, out)
+        self.assertTrue((out / "summary.json").is_file())
+        self.assertTrue((out / "flows.csv").is_file())
+        self.assertTrue((out / "confusion_matrix.csv").is_file())
+        import json as _json
+        payload = _json.loads((out / "summary.json").read_text())
+        self.assertIn("metrics", payload)
+        self.assertIn("per_pcap", payload)
