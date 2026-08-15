@@ -1127,3 +1127,69 @@ class RealPcapValidationTests(TestCase):
         # And the model itself is unchanged / healthy on CIC data.
         cic = _pv.cic_dataset_testing_metrics(sample=5000)
         self.assertGreater(cic["accuracy"], 0.9)
+
+
+# ---------------------------------------------------------------------------
+# SHAP explanations (read-only; no model change)
+# ---------------------------------------------------------------------------
+
+try:
+    import shap as _shap_mod  # noqa: F401
+    _HAS_SHAP = True
+except Exception:  # noqa: BLE001
+    _HAS_SHAP = False
+
+_HAS_TRAIN_PARQUET = (_P2(__file__).resolve().parents[1] / "..").exists() and \
+    (_train_parquet() is not None)
+
+
+@skipUnless(_SCAPY and _HAS_SHAP and _train_parquet() is not None and _REAL_PCAP_DIR.is_dir(),
+            "shap + training parquet + real PCAPs required")
+class ShapAnalysisTests(TestCase):
+    def setUp(self):
+        live_capture._ensure_live_on_path()
+        from predictor import shap_analysis as sa
+        self.sa = sa
+        self.model, _ = ml._load("histgradientboosting")
+        self.cic = sa.cic_ftp_correct(self.model, sample=60)
+
+    def test_data_sources_are_honest(self):
+        # CIC set: only rows the model actually classifies as FTP-BruteForce.
+        enc = {v: k for k, v in ml.LABELS.items()}["FTP-BruteForce"]
+        self.assertTrue((self.model.predict(self.cic[ml.FEATURES]) == enc).all())
+        # Real set: only flows the model classifies Benign.
+        real = self.sa.real_ftp_flows(self.model, only_predicted="Benign")
+        self.assertGreater(len(real), 0)
+        names = [ml.LABELS.get(int(c)) for c in self.model.predict(real)]
+        self.assertTrue(all(n == "Benign" for n in names))
+
+    def test_shap_values_have_the_right_shape_and_feature_order(self):
+        res = self.sa.explain(self.model, self.cic)
+        self.assertEqual(res.values.shape, (len(self.cic), 30, 15))
+        self.assertEqual(res.base.shape, (15,))
+        self.assertEqual(res.features, list(ml.FEATURES))  # exact order
+
+    def test_shap_is_exact_additive(self):
+        res = self.sa.explain(self.model, self.cic)
+        # base + sum(shap) reconstructs the raw margin to numerical precision.
+        self.assertLess(self.sa.additivity_error(self.model, res), 1e-6)
+
+    def test_global_importance_is_finite_nonneg_aligned(self):
+        import numpy as np
+        res = self.sa.explain(self.model, self.cic)
+        gi = self.sa.global_importance(res)
+        self.assertEqual(set(gi["feature"]), set(ml.FEATURES))
+        self.assertEqual(len(gi), 30)
+        self.assertTrue(np.isfinite(gi["mean_abs_shap"]).all())
+        self.assertTrue((gi["mean_abs_shap"] >= 0).all())
+
+    def test_cic_vs_real_comparison_is_finite_and_ranked(self):
+        import numpy as np
+        real = self.sa.real_ftp_flows(self.model, only_predicted="Benign")
+        cmp = self.sa.compare_cic_vs_real(self.model, self.cic, real, toward="Benign")
+        self.assertEqual(len(cmp), 30)
+        for col in ("cic_shap_to_Benign", "real_shap_to_Benign", "difference_real_minus_cic"):
+            self.assertTrue(np.isfinite(cmp[col]).all())
+        # sorted by |difference| descending
+        d = cmp["difference_real_minus_cic"].abs().to_numpy()
+        self.assertTrue((d[:-1] >= d[1:] - 1e-9).all())

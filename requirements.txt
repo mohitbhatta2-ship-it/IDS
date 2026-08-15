@@ -13,5 +13,9 @@ optuna
 # Live traffic capture
 scapy
 
+# Model explainability / validation analysis (analysis-only; the web app never
+# imports it at runtime -- predictor.shap_analysis lazy-imports it).
+shap
+
 # Tests
 pytest
