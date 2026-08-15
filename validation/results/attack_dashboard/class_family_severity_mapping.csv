@@ -1,0 +1,16 @@
+class,family,family_key,severity
+Benign,Benign,benign,None
+DDOS attack-HOIC,DDoS,ddos,Critical
+DDOS attack-LOIC-UDP,DDoS,ddos,Critical
+DDoS attacks-LOIC-HTTP,DDoS,ddos,Critical
+DoS attacks-GoldenEye,DoS,dos,High
+DoS attacks-Hulk,DoS,dos,High
+DoS attacks-SlowHTTPTest,DoS,dos,High
+DoS attacks-Slowloris,DoS,dos,High
+FTP-BruteForce,Brute force,bruteforce,High
+SSH-Bruteforce,Brute force,bruteforce,High
+Brute Force -Web,Web attack,web,High
+Brute Force -XSS,Web attack,web,High
+SQL Injection,Web attack,web,Critical
+Bot,Recon / other,other,Medium
+Infilteration,Recon / other,other,Critical

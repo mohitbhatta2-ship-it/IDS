@@ -1,0 +1,3 @@
+group,support,correct_class,incorrect_class,class_recall,same_group_predicted,group_recall
+High,34,0,34,0.0,0,0.0
+None,8,8,0,1.0,8,1.0

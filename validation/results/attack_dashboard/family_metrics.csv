@@ -1,0 +1,3 @@
+class,ground_truth,correct,incorrect,precision,recall,f1
+benign,8,8,0,0.0,0.0,0.0
+bruteforce,34,0,34,0.0,0.0,0.0

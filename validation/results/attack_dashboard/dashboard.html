@@ -1,0 +1,34 @@
+<!doctype html><html lang=en><head><meta charset=utf-8>
+<meta name=viewport content="width=device-width, initial-scale=1">
+<title>Attack-family / severity dashboard</title>
+<style>
+ body{font:14px system-ui,Segoe UI,sans-serif;margin:2rem;color:#111;background:#fafaf8}
+ h1{font-size:1.4rem} h2{font-size:1.05rem;margin-top:1.6rem;border-bottom:1px solid #ddd;padding-bottom:.25rem}
+ table{border-collapse:collapse;margin:.5rem 0;font-size:.85rem}
+ th,td{border:1px solid #ddd;padding:.35rem .6rem;text-align:right} th{background:#f0f0ec;text-align:left}
+ td:first-child,th:first-child{text-align:left}
+ .tiles{display:flex;gap:1rem;flex-wrap:wrap;margin:.5rem 0}
+ .tile{border:1px solid #ddd;border-radius:8px;padding:.7rem 1rem;background:#fff;min-width:120px}
+ .tile b{display:block;font-size:1.5rem} .tile span{color:#666;font-size:.75rem;text-transform:uppercase}
+ .alert{background:#fdecea;border:1px solid #e34948;border-radius:8px;padding:.7rem 1rem;margin:1rem 0}
+ .muted{color:#666;font-size:.8rem}
+</style></head><body>
+<h1>Attack-family / severity dashboard <span class=muted>(real-pcap, 42 flows)</span></h1>
+<div class='alert'><b>FTP-BruteForce (family: Brute force, severity: High)</b> — support 34, correct 0, recall 0.000. Real FTP brute-force flows are all predicted Benign (recall 0.0) — the train/serve artifact mismatch, visible at family/severity level.</div>
+<div class=tiles>
+ <div class=tile><b>0.190</b><span>Accuracy</span></div>
+ <div class=tile><b>0.095</b><span>Macro Precision</span></div>
+ <div class=tile><b>0.500</b><span>Macro Recall</span></div>
+ <div class=tile><b>0.160</b><span>Macro F1</span></div>
+ <div class=tile><b>8/42</b><span>Correct</span></div>
+</div>
+<h2>Real-PCAP vs CIC-IDS2018</h2><table><thead><tr><th>Source</th><th>Accuracy</th><th>Macro-F1</th><th>n</th></tr></thead><tbody><tr><td>CIC held-out</td><td>0.9799</td><td>0.8827</td><td>40000</td></tr><tr><td>Real capture</td><td>0.1905</td><td>0.1600</td><td>42</td></tr></tbody></table>
+<h2>Confusion matrix</h2><table><thead><tr><th>truth \ pred</th><th>Benign</th><th>FTP-BruteForce</th></tr></thead><tbody><tr><td>Benign</td><td>8</td><td>0</td></tr><tr><td>FTP-BruteForce</td><td>34</td><td>0</td></tr></tbody></table>
+<h2>Per-class</h2><table><thead><tr><th>Class</th><th>Family</th><th>Severity</th><th>Support</th><th>Correct</th><th>Incorrect</th><th>Precision</th><th>Recall</th><th>F1</th></tr></thead><tbody><tr><td>Benign</td><td>Benign</td><td>None</td><td>8</td><td>8</td><td>0</td><td>0.190</td><td>1.000</td><td>0.320</td></tr><tr><td>FTP-BruteForce</td><td>Brute force</td><td>High</td><td>34</td><td>0</td><td>34</td><td>0.000</td><td>0.000</td><td>0.000</td></tr></tbody></table>
+<h2>By attack family (ground truth)</h2><table><thead><tr><th>Family</th><th>Support</th><th>Correct</th><th>Incorrect</th><th>Class recall</th></tr></thead><tbody><tr><td>benign</td><td>8</td><td>8</td><td>0</td><td>1.000</td></tr><tr><td>bruteforce</td><td>34</td><td>0</td><td>34</td><td>0.000</td></tr></tbody></table>
+<h2>By severity (ground truth)</h2><table><thead><tr><th>Severity</th><th>Support</th><th>Correct</th><th>Incorrect</th><th>Class recall</th></tr></thead><tbody><tr><td>High</td><td>34</td><td>0</td><td>34</td><td>0.000</td></tr><tr><td>None</td><td>8</td><td>8</td><td>0</td><td>1.000</td></tr></tbody></table>
+<h2>Confidence distribution</h2><p>mean 0.847 · median 0.834</p><table><thead><tr><th>Bin</th><th>Flows</th></tr></thead><tbody><tr><td><0.5</td><td>3</td></tr><tr><td>0.5-0.6</td><td>0</td></tr><tr><td>0.6-0.7</td><td>1</td></tr><tr><td>0.7-0.8</td><td>15</td></tr><tr><td>0.8-0.9</td><td>3</td></tr><tr><td>0.9-1.0</td><td>20</td></tr></tbody></table>
+<p class=muted>Family mapping reused from predictor.classes; severity from the explicit,
+documented table in predictor.attack_dashboard. Ground truth comes only from the PCAP/dataset
+labels in the existing results — no labels or predictions were regenerated.</p>
+</body></html>

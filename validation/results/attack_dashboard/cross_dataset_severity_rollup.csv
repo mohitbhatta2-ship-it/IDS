@@ -1,0 +1,5 @@
+group,classes,support,correct_class,incorrect_class,class_recall
+Critical,5,4521,3766,755,0.8330015483300155
+High,8,7488,6962,526,0.9297542735042735
+Medium,1,1100,1100,0,1.0
+None,1,1100,1088,12,0.9890909090909091

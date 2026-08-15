@@ -1193,3 +1193,120 @@ class ShapAnalysisTests(TestCase):
         # sorted by |difference| descending
         d = cmp["difference_real_minus_cic"].abs().to_numpy()
         self.assertTrue((d[:-1] >= d[1:] - 1e-9).all())
+
+
+# ---------------------------------------------------------------------------
+# Attack-family / severity dashboard (additive analysis over existing results)
+# ---------------------------------------------------------------------------
+
+from predictor import attack_dashboard as _ad
+from predictor import classes as _classes
+
+_DASH_FLOWS = _P2(__file__).resolve().parents[2] / "validation" / "results" / "flows.csv"
+
+
+class AttackFamilySeverityMappingTests(TestCase):
+    def test_family_mapping_is_reused_from_classes_for_every_class(self):
+        for cls in ml.LABELS.values():
+            self.assertEqual(_ad.family_of(cls), _classes.family_of(cls))
+            self.assertIn(_ad.family_of(cls), _classes.FAMILY_ORDER)
+
+    def test_severity_mapping_covers_all_fifteen_classes_explicitly(self):
+        model_classes = set(ml.LABELS.values())
+        self.assertEqual(set(_ad.SEVERITY) & model_classes, model_classes,
+                         "every trained class must have an explicit severity")
+        for cls in model_classes:
+            self.assertIn(_ad.severity_of(cls), _ad.SEVERITY_ORDER)
+
+    def test_benign_is_the_only_none_severity(self):
+        none_classes = [c for c in ml.LABELS.values() if _ad.severity_of(c) == "None"]
+        self.assertEqual(none_classes, ["Benign"])
+
+    def test_unmapped_class_is_surfaced_not_invented(self):
+        self.assertEqual(_ad.severity_of("Totally New Attack"), "Unknown")
+
+
+class AttackDashboardAggregationTests(TestCase):
+    def _flows(self):
+        # Synthetic per-flow results: ground truth Label + model Predicted Class.
+        return pd.DataFrame({
+            "Label":           ["Benign", "Benign", "FTP-BruteForce", "FTP-BruteForce",
+                                 "DoS attacks-Hulk", "DDOS attack-HOIC"],
+            "Predicted Class": ["Benign", "FTP-BruteForce", "Benign", "FTP-BruteForce",
+                                 "DoS attacks-Hulk", "Benign"],
+            "Confidence":      [0.9, 0.6, 0.8, 0.95, 0.99, 0.7],
+        })
+
+    def test_family_and_severity_support_come_from_ground_truth_only(self):
+        flows = self._flows()
+        d = _ad.build_dashboard(flows)
+        fam = {r["group"]: r for r in d["family"]["summary"]}
+        # support = ground-truth family counts (Benign x2, bruteforce x2, dos x1, ddos x1)
+        self.assertEqual(fam["benign"]["support"], 2)
+        self.assertEqual(fam["bruteforce"]["support"], 2)
+        self.assertEqual(fam["dos"]["support"], 1)
+        self.assertEqual(fam["ddos"]["support"], 1)
+        sev = {r["group"]: r for r in d["severity"]["summary"]}
+        self.assertEqual(sev["None"]["support"], 2)     # 2 Benign
+        self.assertEqual(sev["High"]["support"], 3)     # 2 FTP + 1 Hulk
+        self.assertEqual(sev["Critical"]["support"], 1) # 1 HOIC
+
+    def test_support_is_independent_of_predictions(self):
+        flows = self._flows()
+        base = _ad.build_dashboard(flows)
+        flipped = flows.copy()
+        flipped["Predicted Class"] = "Benign"  # change predictions only
+        after = _ad.build_dashboard(flipped)
+        base_sup = {r["group"]: r["support"] for r in base["family"]["summary"]}
+        after_sup = {r["group"]: r["support"] for r in after["family"]["summary"]}
+        self.assertEqual(base_sup, after_sup, "family support must not depend on predictions")
+
+    def test_class_recall_aggregation_is_correct(self):
+        d = _ad.build_dashboard(self._flows())
+        fam = {r["group"]: r for r in d["family"]["summary"]}
+        # bruteforce: 2 flows, exactly 1 predicted correctly (FTP->FTP)
+        self.assertEqual(fam["bruteforce"]["correct_class"], 1)
+        self.assertEqual(fam["bruteforce"]["incorrect_class"], 1)
+        self.assertAlmostEqual(fam["bruteforce"]["class_recall"], 0.5)
+        self.assertEqual(fam["benign"]["correct_class"], 1)  # 1 of 2 Benign correct
+
+    def test_confusion_and_per_class_match_the_shared_metric_helpers(self):
+        from predictor import pcap_validation as pv
+        flows = self._flows()
+        d = _ad.build_dashboard(flows)
+        self.assertEqual(d["confusion"], pv.confusion_table(flows["Label"], flows["Predicted Class"]))
+        expected = pv.compute_metrics(flows["Label"], flows["Predicted Class"])["per_class"]
+        self.assertEqual(d["per_class"], expected)
+
+    def test_rollup_from_existing_per_class_sums_counts(self):
+        per_class = pd.DataFrame({
+            "class": ["FTP-BruteForce", "SSH-Bruteforce", "Benign"],
+            "ground_truth": [100, 100, 50], "correct": [80, 100, 49], "incorrect": [20, 0, 1],
+        })
+        fam = {r["group"]: r for r in _ad.rollup_per_class(per_class, _ad.family_of)}
+        self.assertEqual(fam["bruteforce"]["support"], 200)
+        self.assertEqual(fam["bruteforce"]["correct_class"], 180)
+        self.assertAlmostEqual(fam["bruteforce"]["class_recall"], 0.9)
+
+    def test_html_renders_the_required_sections(self):
+        html = _ad.render_html(_ad.build_dashboard(self._flows()))
+        for section in ("Confusion matrix", "Per-class", "By attack family", "By severity"):
+            self.assertIn(section, html)
+
+
+@skipUnless(_DASH_FLOWS.is_file(), "committed real-PCAP flows.csv required")
+class AttackDashboardRealResultsUnchangedTests(TestCase):
+    """The dashboard must faithfully reflect the committed real-PCAP results."""
+
+    def test_real_pcap_metrics_match_the_committed_baseline(self):
+        flows = _ad.load_flows(_DASH_FLOWS)
+        d = _ad.build_dashboard(flows)
+        # The frozen real-PCAP baseline (see summary.json): 42 flows, acc 0.1905.
+        self.assertEqual(d["flows"], 42)
+        self.assertAlmostEqual(d["overall"]["accuracy"], 8 / 42, places=6)
+        self.assertAlmostEqual(d["overall"]["macro_f1"], 0.16, places=4)
+        ftp = next(r for r in d["per_class"] if r["class"] == "FTP-BruteForce")
+        self.assertEqual(ftp["ground_truth"], 34)
+        self.assertEqual(ftp["correct"], 0)   # unchanged: all FTP flows -> Benign
+        self.assertEqual(_ad.severity_of("FTP-BruteForce"), "High")
+        self.assertEqual(_ad.family_of("FTP-BruteForce"), "bruteforce")
