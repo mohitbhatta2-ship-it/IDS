@@ -2763,3 +2763,138 @@ class BalancedRetrainResultsTests(TestCase):
         model, _ = ml._load("histgradientboosting")
         acc = float((model.predict(test[ml.FEATURES]) == test["Label"]).mean())
         self.assertAlmostEqual(acc, 0.9803, places=4)
+
+
+# ---------------------------------------------------------------------------
+# FTP behavioural-feature experiment (candidate only; frozen models)
+# ---------------------------------------------------------------------------
+
+from predictor import ftp_behavioral as _fb, retraining_behavioral as _rbh
+
+_FBF_RESULTS = _P2(__file__).resolve().parents[2] / "validation" / "results" / "ftp_behavioral"
+_HAS_FBF = (_FBF_RESULTS / "final_verdict.json").is_file()
+_FBF_READY = _SCAPY and _train_parquet() is not None \
+    and (_P2(__file__).resolve().parents[2] / "validation" / "realistic_pcaps_v2" / "MANIFEST.csv").is_file()
+
+
+class FtpBehaviouralExtractorTests(TestCase):
+    """The behavioural extractor reads only what is on the wire; correct schema."""
+
+    def test_schema_is_the_documented_behaviour_features(self):
+        self.assertEqual(len(_fb.BEHAV_FEATURES), 15)
+        for f in _fb.BEHAV_FEATURES:
+            self.assertTrue(f.startswith("ftp_"))
+
+    @skipUnless(_SCAPY and (_P2(__file__).resolve().parents[2] / "validation" / "realistic_pcaps_v2").is_dir(),
+                "v2 pcaps required")
+    def test_benign_authenticates_bruteforce_fails(self):
+        import glob
+        base = _P2(__file__).resolve().parents[2] / "validation" / "realistic_pcaps_v2"
+        ben = _fb.behavioural_features_for_pcap(glob.glob(str(base / "benign" / "benign_01_*.pcap"))[0])
+        bf = _fb.behavioural_features_for_pcap(glob.glob(str(base / "ftp_bruteforce" / "ftpbf_01_*.pcap"))[0])
+        # benign: has a successful auth, no failed logins
+        self.assertEqual(ben["ftp_has_successful_auth"], 1.0)
+        self.assertEqual(ben["ftp_failed_logins"], 0.0)
+        # brute force: failed logins, never authenticates
+        self.assertGreater(bf["ftp_failed_logins"], 0.0)
+        self.assertEqual(bf["ftp_has_successful_auth"], 0.0)
+
+
+@skipUnless(_FBF_READY, "scapy + parquet + corpora required")
+class BehaviouralRetrainModuleTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        live_capture._ensure_live_on_path()
+        cls.real = _rbh.extract_real_augmented(("v1", "v2", "targeted"))
+
+    def test_augmented_feature_set_is_thirty_plus_fifteen_in_order(self):
+        self.assertEqual(_rbh.FEATURES_AUG, list(ml.FEATURES) + list(_fb.BEHAV_FEATURES))
+        self.assertEqual(len(_rbh.FEATURES_AUG), 45)
+        for f in _rbh.FEATURES_AUG:
+            self.assertIn(f, self.real.df.columns)
+
+    def test_real_flows_have_finite_thirty_features_no_zero_fill(self):
+        self.assertEqual(len(self.real.invalid), 0)
+        self.assertTrue(_np.isfinite(self.real.df[list(ml.FEATURES)].to_numpy()).all())
+        self.assertEqual(set(self.real.df["source"]), {"v1", "v2", "targeted"})   # no independent
+
+    def test_cic_behavioural_is_nan_not_zero(self):
+        cic_Xaug, _ = _rbh.load_cic_augmented()
+        # CIC has no PCAP -> behavioural columns are NaN (missing), never fabricated to 0
+        for f in _fb.BEHAV_FEATURES:
+            self.assertTrue(cic_Xaug[f].isna().all(), f)
+        self.assertTrue(_np.isfinite(cic_Xaug[list(ml.FEATURES)].to_numpy()).all())
+
+    def test_behavioural_features_separate_classes_on_training_data(self):
+        from sklearn.metrics import roc_auc_score
+        y = (self.real.df["Label"] == "FTP-BruteForce").astype(int)
+        # at least one behavioural feature separates the classes essentially perfectly
+        best = max(abs(roc_auc_score(y, self.real.df[f]) - 0.5) for f in _fb.BEHAV_FEATURES)
+        self.assertGreater(best, 0.45)
+
+    def test_loco_no_flow_overlap(self):
+        cic_Xaug, cic_y = _rbh.load_cic_augmented()
+        subX, suby = _rbh.stratified_cic_subsample_aug(cic_Xaug, cic_y, 1500)
+        caps = _rbh.v2_captures(self.real)[:2]
+        loco = _rbh.leave_one_capture_out(subX, suby, self.real, caps, 1.0, 1.0)
+        self.assertEqual(len(loco["folds"]), len(caps))
+
+    def test_independent_not_in_training_sources(self):
+        base = _P2(__file__).resolve().parents[2] / "validation"
+        indep = _pcap_sha_set(base / "independent_real_pcaps")
+        train = (_pcap_sha_set(base / "realistic_pcaps") | _pcap_sha_set(base / "realistic_pcaps_v2")
+                 | _pcap_sha_set(base / "targeted_benign_pcaps"))
+        self.assertTrue(indep.isdisjoint(train))
+
+    def test_candidate_dir_outside_production(self):
+        self.assertNotIn("webapp_data", str(_rbh.candidate_dir()))
+
+    def test_reproducible(self):
+        cic_Xaug, cic_y = _rbh.load_cic_augmented()
+        X, y, w, _ = _rbh.assemble(cic_Xaug, cic_y, self.real.df, ftp_weight=1.0, benign_weight=1.0)
+        # small subsample to keep it fast but deterministic
+        idx = X.sample(3000, random_state=0).index
+        m1 = _rbh.train(X.loc[idx], y.loc[idx], w[idx]); m2 = _rbh.train(X.loc[idx], y.loc[idx], w[idx])
+        self.assertTrue((m1.predict(self.real.df[_rbh.FEATURES_AUG]) == m2.predict(self.real.df[_rbh.FEATURES_AUG])).all())
+
+
+@skipUnless(_HAS_FBF, "committed ftp_behavioral results not present")
+class BehaviouralResultsTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.verdict = json.loads((_FBF_RESULTS / "final_verdict.json").read_text())
+        cls.hashes = json.loads((_FBF_RESULTS / "model_hashes_before_after.json").read_text())
+        cls.leak = json.loads((_FBF_RESULTS / "leakage_validation.json").read_text())
+
+    def test_gate_passed_recorded(self):
+        self.assertIn("gate_passed", self.verdict)
+
+    def test_frozen_artifacts_unchanged(self):
+        self.assertTrue(self.hashes["unchanged"])
+        self.assertEqual(self.hashes["before"], self.hashes["after"])
+
+    def test_not_auto_promoted(self):
+        self.assertFalse(self.verdict["promote"])
+
+    def test_selection_not_from_independent(self):
+        self.assertIn("v2 LOCO only", self.verdict["selection_basis"])
+
+    def test_leakage_flags(self):
+        self.assertTrue(self.leak["independent_disjoint_from_training"])
+        self.assertTrue(self.leak["cic_behavioural_is_nan_not_zero"])
+        self.assertTrue(self.leak["no_zero_fill"])
+
+    def test_required_files_exist(self):
+        for name in ("separability_analysis.csv", "candidate_metrics.csv",
+                     "independent_test_metrics.csv", "bootstrap_ci_results.csv",
+                     "leakage_validation.json", "model_hashes_before_after.json",
+                     "final_verdict.json", "report.md"):
+            self.assertTrue((_FBF_RESULTS / name).is_file(), name)
+
+    def test_production_still_scores_known_number(self):
+        test = pd.read_parquet(ml.DATA_ROOT / "Processed_Data" / "test_selected.parquet")
+        model, _ = ml._load("histgradientboosting")
+        acc = float((model.predict(test[ml.FEATURES]) == test["Label"]).mean())
+        self.assertAlmostEqual(acc, 0.9803, places=4)

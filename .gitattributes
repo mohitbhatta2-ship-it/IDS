@@ -10,3 +10,6 @@ validation/models/targeted-benign-candidate/*.pkl !filter !diff !merge
 
 # Balanced real-PCAP candidate models: store as normal blobs (LFS push unavailable here)
 validation/models/balanced-real-candidate/*.pkl !filter !diff !merge
+
+# FTP-behavioural candidate models: store as normal blobs (LFS push unavailable here)
+validation/models/ftp-behavioral-candidate/*.pkl !filter !diff !merge

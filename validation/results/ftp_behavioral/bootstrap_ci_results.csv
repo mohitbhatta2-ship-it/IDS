@@ -1,0 +1,11 @@
+model,metric,lo95,hi95
+production,ftp_recall,0.0,0.0
+production,benign_recall,0.9249810606060607,1.0
+candidate2,ftp_recall,0.5945122454028202,0.8978903896012893
+candidate2,benign_recall,0.6463414634146342,0.7894949066213921
+control_30feat,ftp_recall,0.37563062800241165,0.6720465712454603
+control_30feat,benign_recall,0.7717313664596274,0.95
+aug_unweighted,ftp_recall,1.0,1.0
+aug_unweighted,benign_recall,1.0,1.0
+aug_balanced,ftp_recall,1.0,1.0
+aug_balanced,benign_recall,1.0,1.0
