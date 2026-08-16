@@ -1,0 +1,17 @@
+capture_id,label,scenario,timestamp,source,destination,client_tool,attempts,capture_duration_s,pcap_filename,validation_status
+benign_01,Benign,successful_login,2026-08-16T01:02:03.485080+00:00,127.0.0.1,127.0.0.1:21,python-ftplib,1,0.0013,benign/benign_01_successful_login.pcap,valid
+benign_02,Benign,login_then_listing,2026-08-16T01:02:05.814880+00:00,127.0.0.1,127.0.0.1:21,python-ftplib,1,0.0038,benign/benign_02_login_then_listing.pcap,valid
+benign_03,Benign,login_then_commands,2026-08-16T01:02:07.526942+00:00,127.0.0.1,127.0.0.1:21,python-ftplib,1,0.0016,benign/benign_03_login_then_commands.pcap,valid
+benign_04,Benign,file_download,2026-08-16T01:02:09.229858+00:00,127.0.0.1,127.0.0.1:21,python-ftplib,1,0.0033,benign/benign_04_file_download.pcap,valid
+benign_05,Benign,file_upload,2026-08-16T01:02:10.930209+00:00,127.0.0.1,127.0.0.1:21,python-ftplib,1,0.0034,benign/benign_05_file_upload.pcap,valid
+benign_06,Benign,multiple_sessions,2026-08-16T01:02:12.637836+00:00,127.0.0.1,127.0.0.1:21,python-ftplib,4,0.4632,benign/benign_06_multiple_sessions.pcap,valid
+benign_07,Benign,long_session,2026-08-16T01:02:14.980923+00:00,127.0.0.1,127.0.0.1:21,python-ftplib,1,3.6148,benign/benign_07_long_session.pcap,valid
+benign_08,Benign,short_session,2026-08-16T01:02:20.419896+00:00,127.0.0.1,127.0.0.1:21,python-ftplib,1,0.0011,benign/benign_08_short_session.pcap,valid
+ftpbf_01,FTP-BruteForce,slow_failed_logins,2026-08-16T01:02:22.125195+00:00,127.0.0.1,127.0.0.1:21,python-ftplib,6,22.0228,ftp_bruteforce/ftpbf_01_slow_failed_logins.pcap,valid
+ftpbf_02,FTP-BruteForce,fast_failed_logins,2026-08-16T01:02:46.663791+00:00,127.0.0.1,127.0.0.1:21,python-ftplib,12,33.3148,ftp_bruteforce/ftpbf_02_fast_failed_logins.pcap,valid
+ftpbf_03,FTP-BruteForce,different_usernames,2026-08-16T01:03:24.699226+00:00,127.0.0.1,127.0.0.1:21,python-ftplib,8,24.7409,ftp_bruteforce/ftpbf_03_different_usernames.pcap,valid
+ftpbf_04,FTP-BruteForce,different_passwords,2026-08-16T01:03:51.257525+00:00,127.0.0.1,127.0.0.1:21,python-ftplib,12,37.1562,ftp_bruteforce/ftpbf_04_different_passwords.pcap,valid
+ftpbf_05,FTP-BruteForce,many_attempts,2026-08-16T01:04:30.251162+00:00,127.0.0.1,127.0.0.1:21,python-ftplib,24,72.5769,ftp_bruteforce/ftpbf_05_many_attempts.pcap,valid
+ftpbf_06,FTP-BruteForce,few_attempts,2026-08-16T01:05:44.631612+00:00,127.0.0.1,127.0.0.1:21,python-ftplib,3,9.6146,ftp_bruteforce/ftpbf_06_few_attempts.pcap,valid
+ftpbf_07,FTP-BruteForce,single_connection_many_attempts,2026-08-16T01:05:56.257224+00:00,127.0.0.1,127.0.0.1:21,python-ftplib,8,24.8327,ftp_bruteforce/ftpbf_07_single_connection_many_attempts.pcap,valid
+ftpbf_08,FTP-BruteForce,multi_burst,2026-08-16T01:06:22.796730+00:00,127.0.0.1,127.0.0.1:21,python-ftplib,12,37.2108,ftp_bruteforce/ftpbf_08_multi_burst.pcap,valid

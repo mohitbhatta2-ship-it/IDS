@@ -1,0 +1,39 @@
+{
+  "capture_id": "benign_08",
+  "label": "Benign",
+  "scenario": "short_session",
+  "timestamp": "2026-08-16T01:02:20.419896+00:00",
+  "source": "127.0.0.1",
+  "destination": "127.0.0.1:21",
+  "client_tool": "python-ftplib",
+  "attempts": 1,
+  "capture_duration_s": 0.0011,
+  "pcap_filename": "benign/benign_08_short_session.pcap",
+  "validation_status": "valid",
+  "detail": {
+    "attempts": 1,
+    "successes": 1,
+    "commands": [
+      "USER",
+      "PASS",
+      "NOOP",
+      "QUIT"
+    ],
+    "packets": 18,
+    "wall_duration_s": 0.802,
+    "check": {
+      "pcap": "benign_08_short_session.pcap",
+      "exists": true,
+      "readable": true,
+      "packets": 18,
+      "has_ftp_traffic": true,
+      "src_ok": true,
+      "dst_ok": true,
+      "protocol_ok": true,
+      "port_ok": true,
+      "duration_s": 0.0010972023010253906,
+      "duration_valid": true
+    },
+    "check_errors": []
+  }
+}

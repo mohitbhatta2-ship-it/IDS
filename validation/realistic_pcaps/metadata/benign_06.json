@@ -1,0 +1,52 @@
+{
+  "capture_id": "benign_06",
+  "label": "Benign",
+  "scenario": "multiple_sessions",
+  "timestamp": "2026-08-16T01:02:12.637836+00:00",
+  "source": "127.0.0.1",
+  "destination": "127.0.0.1:21",
+  "client_tool": "python-ftplib",
+  "attempts": 4,
+  "capture_duration_s": 0.4632,
+  "pcap_filename": "benign/benign_06_multiple_sessions.pcap",
+  "validation_status": "valid",
+  "detail": {
+    "attempts": 4,
+    "successes": 4,
+    "sessions": 4,
+    "commands": [
+      "USER",
+      "PASS",
+      "LIST",
+      "QUIT",
+      "USER",
+      "PASS",
+      "LIST",
+      "QUIT",
+      "USER",
+      "PASS",
+      "LIST",
+      "QUIT",
+      "USER",
+      "PASS",
+      "LIST",
+      "QUIT"
+    ],
+    "packets": 126,
+    "wall_duration_s": 1.414,
+    "check": {
+      "pcap": "benign_06_multiple_sessions.pcap",
+      "exists": true,
+      "readable": true,
+      "packets": 126,
+      "has_ftp_traffic": true,
+      "src_ok": true,
+      "dst_ok": true,
+      "protocol_ok": true,
+      "port_ok": true,
+      "duration_s": 0.46318912506103516,
+      "duration_valid": true
+    },
+    "check_errors": []
+  }
+}

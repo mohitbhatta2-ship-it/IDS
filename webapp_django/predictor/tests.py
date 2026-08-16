@@ -1569,3 +1569,169 @@ class CfmExperimentTests(TestCase):
         s = self.ce.summarise_closer(dist)
         self.assertEqual(s["comparable_features"],
                          s["cicflowmeter_closer"] + s["custom_closer"] + s["tie"])
+
+
+# ---------------------------------------------------------------------------
+# Realistic-PCAP DATA EXPANSION — local-lab capture framework (experimental)
+# ---------------------------------------------------------------------------
+
+import shutil as _shutil
+from predictor import lab_capture as _lab
+
+_HAS_PYFTPDLIB = False
+try:
+    import pyftpdlib as _pyftpdlib_pkg  # noqa: F401
+    _HAS_PYFTPDLIB = True
+except Exception:  # noqa: BLE001
+    _HAS_PYFTPDLIB = False
+
+_HAS_TCPDUMP = _shutil.which("tcpdump") is not None
+_IS_ROOT = (getattr(_os, "geteuid", lambda: 1)() == 0)
+_CAN_CAPTURE = _SCAPY and _HAS_PYFTPDLIB and _HAS_TCPDUMP and _IS_ROOT
+_EXPANSION_DIR = _P2(__file__).resolve().parents[2] / "validation" / "realistic_pcaps"
+_HAS_EXPANSION = (_EXPANSION_DIR / "MANIFEST.csv").is_file()
+
+
+class LabTargetAndScenarioTests(TestCase):
+    """Framework invariants that need no live capture (always run)."""
+
+    def test_target_is_loopback_only(self):
+        t = _lab.default_target()
+        self.assertTrue(t.is_loopback())
+        self.assertEqual(t.host, "127.0.0.1")
+
+    def test_bpf_confines_to_lab_ports(self):
+        t = _lab.LabTarget(control_port=21, passive_lo=60000, passive_hi=60040)
+        bpf = t.bpf()
+        self.assertIn("tcp port 21", bpf)
+        self.assertIn("portrange 60000-60040", bpf)
+
+    def test_scenario_catalogs_are_well_formed(self):
+        for catalog in (_lab.BENIGN_SCENARIOS, _lab.BRUTEFORCE_SCENARIOS):
+            names = [n for n, _fn in catalog]
+            self.assertEqual(len(names), len(set(names)))  # unique
+            for _n, fn in catalog:
+                self.assertTrue(callable(fn))
+        # the diversity the task asks for
+        self.assertGreaterEqual(len(_lab.BENIGN_SCENARIOS), 6)
+        self.assertGreaterEqual(len(_lab.BRUTEFORCE_SCENARIOS), 6)
+
+    def test_bruteforce_credentials_are_all_wrong(self):
+        # brute-force pools must never contain the real lab password
+        t = _lab.default_target()
+        self.assertNotIn(t.password, _lab._WRONG_PW)
+
+    def test_capture_meta_row_matches_manifest_columns(self):
+        m = _lab.CaptureMeta(
+            capture_id="x", label="Benign", scenario="s", timestamp="t",
+            source="127.0.0.1", destination="127.0.0.1:21", client_tool="python-ftplib",
+            attempts=1, capture_duration_s=0.0, pcap_filename="benign/x.pcap",
+            validation_status="valid")
+        self.assertEqual(set(m.as_row().keys()), set(_lab.MANIFEST_COLUMNS))
+
+
+@skipUnless(_CAN_CAPTURE, "needs root + tcpdump + pyftpdlib + scapy for a live capture")
+class LiveLabCaptureTests(TestCase):
+    """Prove the framework captures REAL, independent loopback traffic."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.tmp = Path(tempfile.mkdtemp())
+        cls.target = _lab.LabTarget(control_port=2121)   # unprivileged test port
+        cls.server = _lab.FtpLabServer(target=cls.target, root=cls.tmp / "home").start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.server.stop()
+        _shutil.rmtree(cls.tmp, ignore_errors=True)
+        super().tearDownClass()
+
+    def _capture(self, name, fn):
+        pcap = self.tmp / f"{name}.pcap"
+        cap = _lab.Tcpdump(pcap_path=pcap, target=self.target).start()
+        try:
+            stats = fn(self.target)
+        finally:
+            cap.stop()
+        return pcap, stats
+
+    def test_server_verifies(self):
+        self.assertTrue(self.server.verify())
+
+    def test_benign_capture_is_real_and_loopback(self):
+        pcap, _ = self._capture("benign", _lab.benign_login_list)
+        chk = _lab.verify_pcap(pcap, self.target)
+        self.assertTrue(chk.ok, chk.errors)
+        self.assertGreater(chk.packets, 0)
+        self.assertTrue(chk.src_ok and chk.dst_ok)      # loopback only
+        self.assertTrue(chk.has_ftp_traffic)
+
+    def test_bruteforce_capture_records_failed_attempts(self):
+        pcap, stats = self._capture("bf", _lab.bf_few_attempts)
+        chk = _lab.verify_pcap(pcap, self.target)
+        self.assertTrue(chk.ok, chk.errors)
+        # every guess is wrong on purpose -> all failures, no successful login
+        self.assertEqual(stats["successes"], 0)
+        self.assertGreater(stats["failures"], 0)
+
+    def test_two_captures_are_independent_not_copies(self):
+        p1, _ = self._capture("indep1", _lab.benign_login)
+        p2, _ = self._capture("indep2", _lab.benign_login)
+        self.assertNotEqual(p1.read_bytes(), p2.read_bytes())   # distinct captures
+        from scapy.all import rdpcap, TCP
+        ports1 = {pk[TCP].sport for pk in rdpcap(str(p1)) if TCP in pk}
+        ports2 = {pk[TCP].sport for pk in rdpcap(str(p2)) if TCP in pk}
+        # fresh interactions use fresh ephemeral client ports
+        self.assertTrue(ports1 != ports2)
+
+
+@skipUnless(_HAS_EXPANSION, "collected realistic_pcaps/ not present")
+class CollectedExpansionArtifactTests(TestCase):
+    """Validate the committed collection artifacts (manifest, pcaps, labels)."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        with (_EXPANSION_DIR / "MANIFEST.csv").open() as f:
+            cls.rows = list(csv.DictReader(f))
+
+    def test_manifest_has_all_required_columns(self):
+        self.assertTrue(self.rows)
+        self.assertEqual(set(self.rows[0].keys()), set(_lab.MANIFEST_COLUMNS))
+
+    def test_every_manifest_pcap_exists_on_disk(self):
+        for r in self.rows:
+            self.assertTrue((_EXPANSION_DIR / r["pcap_filename"]).is_file(), r["pcap_filename"])
+
+    def test_labels_come_from_folders_not_predictions(self):
+        for r in self.rows:
+            folder = r["pcap_filename"].split("/")[0]
+            expected = "Benign" if folder == "benign" else "FTP-BruteForce"
+            self.assertEqual(r["label"], expected)
+            self.assertIn(folder, ("benign", "ftp_bruteforce"))
+
+    def test_pcaps_on_disk_match_manifest(self):
+        on_disk = {p.name for p in _EXPANSION_DIR.rglob("*.pcap")}
+        in_manifest = {Path(r["pcap_filename"]).name for r in self.rows}
+        self.assertEqual(on_disk, in_manifest)
+
+    @skipUnless(_SCAPY, "scapy required")
+    def test_a_sample_capture_verifies_and_extracts_thirty_features(self):
+        from predictor import pcap_validation as pv
+        live_capture._ensure_live_on_path()
+        target = _lab.default_target()
+        # check one benign and one brute-force capture end to end
+        sample = [r for r in self.rows if r["capture_id"] in ("benign_02", "ftpbf_01")]
+        self.assertTrue(sample)
+        for r in sample:
+            pcap = _EXPANSION_DIR / r["pcap_filename"]
+            chk = _lab.verify_pcap(pcap, target)
+            self.assertTrue(chk.ok, chk.errors)
+            flows = pv.replay_pcap(pcap)
+            self.assertGreater(len(flows), 0)
+            for fl in flows:
+                # exactly the 30 finite features, in order, no zero-fill
+                self.assertIsNone(pv._feature_problem(fl["features"]))
+                ordered = [float(fl["features"][f]) for f in ml.FEATURES]
+                self.assertEqual(len(ordered), 30)

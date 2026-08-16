@@ -1,0 +1,37 @@
+{
+  "capture_id": "ftpbf_02",
+  "label": "FTP-BruteForce",
+  "scenario": "fast_failed_logins",
+  "timestamp": "2026-08-16T01:02:46.663791+00:00",
+  "source": "127.0.0.1",
+  "destination": "127.0.0.1:21",
+  "client_tool": "python-ftplib",
+  "attempts": 12,
+  "capture_duration_s": 33.3148,
+  "pcap_filename": "ftp_bruteforce/ftpbf_02_fast_failed_logins.pcap",
+  "validation_status": "valid",
+  "detail": {
+    "attempts": 12,
+    "successes": 0,
+    "failures": 12,
+    "distinct_usernames": 1,
+    "delay_s": 0.02,
+    "pattern": "new_conn",
+    "packets": 198,
+    "wall_duration_s": 37.095,
+    "check": {
+      "pcap": "ftpbf_02_fast_failed_logins.pcap",
+      "exists": true,
+      "readable": true,
+      "packets": 198,
+      "has_ftp_traffic": true,
+      "src_ok": true,
+      "dst_ok": true,
+      "protocol_ok": true,
+      "port_ok": true,
+      "duration_s": 33.31476402282715,
+      "duration_valid": true
+    },
+    "check_errors": []
+  }
+}
