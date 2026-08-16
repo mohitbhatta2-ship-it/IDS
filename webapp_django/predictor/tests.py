@@ -3039,3 +3039,157 @@ class RobustnessResultsTests(TestCase):
         model, _ = ml._load("histgradientboosting")
         acc = float((model.predict(test[ml.FEATURES]) == test["Label"]).mean())
         self.assertAlmostEqual(acc, 0.9803, places=4)
+
+
+# ---------------------------------------------------------------------------
+# Robust-retraining experiment (messy TRAINING corpus + candidate retraining)
+# ---------------------------------------------------------------------------
+
+from predictor import robust_train_capture as _rtc
+
+_RTRAIN_DIR = _P2(__file__).resolve().parents[2] / "validation" / "robust_train_pcaps"
+_HAS_RTRAIN = (_RTRAIN_DIR / "MANIFEST.csv").is_file()
+_RRT_RESULTS = _P2(__file__).resolve().parents[2] / "validation" / "results" / "ftp_behavioral_robust_retraining"
+_HAS_RRT_RESULTS = (_RRT_RESULTS / "final_verdict.json").is_file()
+
+
+class RobustTrainCaptureFrameworkTests(TestCase):
+    def test_new_ports_and_addresses_disjoint_from_test_corpus(self):
+        # training corpus uses NEW ports 2430/2440 and 127.0.0.14-16 (disjoint from the
+        # 34-PCAP test corpus's 2330/2340 and 127.0.0.11-13)
+        self.assertEqual(set(_rtc.TRAIN_PORT.values()), {2430, 2440})
+        self.assertTrue(set(_rtc.TRAIN_PORT.values()).isdisjoint(set(_rc.SERVER_PORT.values())))
+        train_addrs = {a for a, _ in _rtc.train_environments().values()}
+        test_addrs = {a for a, _ in _rc.environments().values()}
+        # the loopback lab addresses must not overlap
+        self.assertNotIn("127.0.0.14", test_addrs)
+        for addr in train_addrs:
+            self.assertTrue(_rtc.is_controlled_local(addr))
+
+    def test_specs_have_overlapping_failed_login_families_in_both_classes(self):
+        specs = _rtc.specs()
+        benign_fams = {s.family for s in specs if s.label == "Benign"}
+        ftp_fams = {s.family for s in specs if s.label == "FTP-BruteForce"}
+        # benign side must include failed-login families (mistype/gave_up)
+        self.assertTrue({"mistype", "gave_up"}.issubset(benign_fams))
+        # attacker side must include all_fail AND eventual_success
+        self.assertTrue({"all_fail", "eventual_success"}.issubset(ftp_fams))
+
+    def test_robust_train_is_a_source_in_extractor(self):
+        # the extractor must know how to load the messy training corpus
+        self.assertIn("robust_train", _rbh.extract_real_augmented.__doc__ or "robust_train")
+        # dmap wiring: calling with a nonexistent dir is tolerated but the key must resolve
+        import inspect
+        src = inspect.getsource(_rbh.extract_real_augmented)
+        self.assertIn("robust_train", src)
+        self.assertIn("robust_train_pcaps", src)
+
+
+@skipUnless(_HAS_RTRAIN, "robust_train corpus not present")
+class RobustTrainCorpusArtifactTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        with (_RTRAIN_DIR / "MANIFEST.csv").open() as f:
+            cls.rows = list(csv.DictReader(f))
+        cls.base = _P2(__file__).resolve().parents[2] / "validation"
+
+    def test_disjoint_from_the_34pcap_test_corpus_and_all_prior(self):
+        new = _pcap_sha_set(_RTRAIN_DIR)
+        for other in ("realistic_pcaps", "realistic_pcaps_v2", "independent_real_pcaps",
+                      "targeted_benign_pcaps", "robustness_pcaps"):
+            self.assertTrue(new.isdisjoint(_pcap_sha_set(self.base / other)), other)
+
+    def test_no_duplicate_pcaps(self):
+        hashes = {}
+        for p in _RTRAIN_DIR.rglob("*.pcap"):
+            h = _hashlib.sha256(p.read_bytes()).hexdigest()
+            self.assertNotIn(h, hashes); hashes[h] = p.name
+
+    def test_labels_from_folders(self):
+        for r in self.rows:
+            folder = "benign" if r["label"] == "Benign" else "ftp_bruteforce"
+            self.assertTrue(list((_RTRAIN_DIR / folder).glob(f"{r['capture_id']}_*.pcap")))
+            self.assertIn(r["label"], ("Benign", "FTP-BruteForce"))
+
+    def test_all_verified_valid(self):
+        for r in self.rows:
+            self.assertEqual(r["verification_status"], "valid", r["capture_id"])
+
+    @skipUnless(_SCAPY, "scapy")
+    def test_failed_login_overlap_across_classes(self):
+        # BOTH classes must carry sessions with failed logins, AND both classes must
+        # contain sessions that eventually authenticate -- so neither failed-login count
+        # nor "has successful auth" separates the classes (the anti-shortcut signal).
+        import glob
+
+        def feats(paths):
+            return [_fb.behavioural_features_for_pcap(p) for p in sorted(paths)]
+
+        benign = feats(glob.glob(str(_RTRAIN_DIR / "benign" / "*.pcap")))
+        ftp = feats(glob.glob(str(_RTRAIN_DIR / "ftp_bruteforce" / "*.pcap")))
+        # benign sessions that FAIL at least once exist (mistype / gave_up)
+        self.assertTrue(any(b["ftp_failed_logins"] > 0 for b in benign))
+        # benign sessions that fail THEN succeed exist (overlap on both proxies)
+        self.assertTrue(any(b["ftp_failed_logins"] > 0 and b["ftp_has_successful_auth"] == 1.0 for b in benign))
+        # attacker sessions with failed logins exist, and some eventually authenticate
+        self.assertTrue(any(e["ftp_failed_logins"] > 0 for e in ftp))
+        self.assertTrue(any(e["ftp_failed_logins"] > 0 and e["ftp_has_successful_auth"] == 1.0 for e in ftp))
+
+
+@skipUnless(_HAS_RRT_RESULTS, "committed robust-retraining results not present")
+class RobustRetrainResultsTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.verdict = json.loads((_RRT_RESULTS / "final_verdict.json").read_text())
+        cls.hashes = json.loads((_RRT_RESULTS / "model_hashes_before_after.json").read_text())
+        cls.leak = json.loads((_RRT_RESULTS / "leakage_validation.json").read_text())
+
+    def test_frozen_artifacts_unchanged(self):
+        self.assertTrue(self.hashes["unchanged"])
+        self.assertEqual(self.hashes["before"], self.hashes["after"])
+
+    def test_not_promoted(self):
+        self.assertFalse(self.verdict["promote"])
+
+    def test_selection_did_not_use_the_test_corpus(self):
+        self.assertIn("CIC", self.leak["selection_used"])
+        self.assertNotIn("robustness_pcaps", self.leak["selection_used"])
+        self.assertTrue(self.leak["test34_is_test_only"])
+
+    def test_train_disjoint_from_test(self):
+        self.assertTrue(self.leak["train_disjoint_from_test34"])
+        self.assertTrue(self.leak["train_disjoint_from_prior"])
+        self.assertTrue(self.leak["no_zero_fill_train"])
+        self.assertTrue(self.leak["no_zero_fill_test"])
+
+    def test_feature_integrity(self):
+        self.assertEqual(self.leak["n_features"], 45)
+        self.assertEqual(self.leak["n_packet_features"], 30)
+        self.assertTrue(self.leak["packet_feature_order_preserved"])
+        self.assertTrue(self.leak["cic_behavioural_are_nan"])
+
+    def test_overlap_recorded_in_training(self):
+        ov = self.leak["failed_login_overlap_in_train"]
+        self.assertGreater(ov["benign_with_fails"], 0)
+        self.assertGreater(ov["ftp_with_fails"], 0)
+        self.assertGreater(ov["ftp_eventual_auth"], 0)
+
+    def test_ablation_and_shortcut_diagnostics_recorded(self):
+        self.assertIn("ftp_recall_drop_without_failed_logins", self.verdict)
+        self.assertIn("no_major_failed_login_dependence", self.verdict)
+        self.assertIn("beats_candidate2", self.verdict)
+
+    def test_required_files_exist(self):
+        for name in ("final_test_metrics.csv", "cic_heldout_metrics.csv", "loco_pooled_metrics.json",
+                     "per_scenario_family_metrics.csv", "per_scenario_metrics.csv", "per_client_metrics.csv",
+                     "per_server_metrics.csv", "confidence_distribution.csv", "leakage_validation.json",
+                     "model_hashes_before_after.json", "training_metadata.json", "final_verdict.json", "report.md"):
+            self.assertTrue((_RRT_RESULTS / name).is_file(), name)
+
+    def test_production_unchanged(self):
+        test = pd.read_parquet(ml.DATA_ROOT / "Processed_Data" / "test_selected.parquet")
+        model, _ = ml._load("histgradientboosting")
+        acc = float((model.predict(test[ml.FEATURES]) == test["Label"]).mean())
+        self.assertAlmostEqual(acc, 0.9803, places=4)

@@ -16,3 +16,6 @@ validation/models/ftp-behavioral-candidate/*.pkl !filter !diff !merge
 
 # Robustness ablation models: store as normal blobs (LFS push unavailable here)
 validation/models/ftp-behavioral-robustness/*.pkl !filter !diff !merge
+
+# Robust-retraining candidate + ablation models: store as normal blobs (LFS push unavailable here)
+validation/models/ftp-behavioral-robust-retraining/*.pkl !filter !diff !merge

@@ -1,0 +1,27 @@
+{
+  "capture_id": "benign_15",
+  "scenario": "gave_up_alice_2",
+  "label": "Benign",
+  "client": "python-ftplib",
+  "server": "permissive(pyftpdlib)",
+  "environment": "rt16 (127.0.0.16)",
+  "interface": "lo",
+  "mode": "passive",
+  "scenario_family": "gave_up",
+  "attempts": 2,
+  "duration_s": 0.0011,
+  "packet_count": 17,
+  "capture_timestamp": "2026-08-16T12:49:13.235819+00:00",
+  "source": "127.0.0.16",
+  "destination": "127.0.0.16:2440",
+  "capture_command": "tcpdump -i lo -w <pcap> -U -n 'host 127.0.0.16 and (tcp port 2440 or tcp port 20 or tcp portrange 62200-62239)'",
+  "verification_status": "valid",
+  "detail": {
+    "attempts": 2,
+    "successes": 0,
+    "failures": 2,
+    "user": "alice",
+    "label_reason": "benign_gave_up_user",
+    "check_errors": []
+  }
+}

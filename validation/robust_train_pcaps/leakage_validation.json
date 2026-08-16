@@ -1,0 +1,14 @@
+{
+  "all_pass": true,
+  "checks": {
+    "disjoint_from_v1": true,
+    "disjoint_from_v2": true,
+    "disjoint_from_independent": true,
+    "disjoint_from_targeted": true,
+    "disjoint_from_robustness_test": true,
+    "no_duplicate_within_corpus": true,
+    "labels_only_from_folders": true,
+    "all_verified_valid": true
+  },
+  "n_new": 48
+}

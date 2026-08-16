@@ -1,0 +1,27 @@
+{
+  "capture_id": "benign_08",
+  "scenario": "one_wrong_then_success_alice",
+  "label": "Benign",
+  "client": "python-ftplib",
+  "server": "permissive(pyftpdlib)",
+  "environment": "rthost (192.0.2.2)",
+  "interface": "lo",
+  "mode": "passive",
+  "scenario_family": "mistype",
+  "attempts": 2,
+  "duration_s": 0.001,
+  "packet_count": 17,
+  "capture_timestamp": "2026-08-16T12:49:00.782653+00:00",
+  "source": "192.0.2.2",
+  "destination": "192.0.2.2:2440",
+  "capture_command": "tcpdump -i lo -w <pcap> -U -n 'host 192.0.2.2 and (tcp port 2440 or tcp port 20 or tcp portrange 62280-62319)'",
+  "verification_status": "valid",
+  "detail": {
+    "attempts": 2,
+    "successes": 1,
+    "failed_before_success": 1,
+    "user": "alice",
+    "label_reason": "benign_mistype_user",
+    "check_errors": []
+  }
+}

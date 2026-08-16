@@ -1,0 +1,26 @@
+{
+  "capture_id": "ftpbf_12",
+  "scenario": "different_users_fail",
+  "label": "FTP-BruteForce",
+  "client": "python-ftplib",
+  "server": "permissive(pyftpdlib)",
+  "environment": "rt15 (127.0.0.15)",
+  "interface": "lo",
+  "mode": "passive",
+  "scenario_family": "all_fail",
+  "attempts": 6,
+  "duration_s": 0.0029,
+  "packet_count": 91,
+  "capture_timestamp": "2026-08-16T12:49:59.736681+00:00",
+  "source": "127.0.0.15",
+  "destination": "127.0.0.15:2440",
+  "capture_command": "tcpdump -i lo -w <pcap> -U -n 'host 127.0.0.15 and (tcp port 2440 or tcp port 20 or tcp portrange 62120-62159)'",
+  "verification_status": "valid",
+  "detail": {
+    "attempts": 6,
+    "successes": 0,
+    "failures": 6,
+    "label_reason": "bf_users_fail",
+    "check_errors": []
+  }
+}

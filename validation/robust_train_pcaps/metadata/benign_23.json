@@ -1,0 +1,25 @@
+{
+  "capture_id": "benign_23",
+  "scenario": "mixed_activity",
+  "label": "Benign",
+  "client": "python-ftplib",
+  "server": "permissive(pyftpdlib)",
+  "environment": "rt16 (127.0.0.16)",
+  "interface": "lo",
+  "mode": "passive",
+  "scenario_family": "activity",
+  "attempts": 1,
+  "duration_s": 0.0049,
+  "packet_count": 71,
+  "capture_timestamp": "2026-08-16T12:49:27.120733+00:00",
+  "source": "127.0.0.16",
+  "destination": "127.0.0.16:2440",
+  "capture_command": "tcpdump -i lo -w <pcap> -U -n 'host 127.0.0.16 and (tcp port 2440 or tcp port 20 or tcp portrange 62200-62239)'",
+  "verification_status": "valid",
+  "detail": {
+    "attempts": 1,
+    "successes": 1,
+    "bytes_down": 1300,
+    "check_errors": []
+  }
+}

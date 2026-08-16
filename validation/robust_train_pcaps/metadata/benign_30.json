@@ -1,0 +1,25 @@
+{
+  "capture_id": "benign_30",
+  "scenario": "wget_benign",
+  "label": "Benign",
+  "client": "wget",
+  "server": "permissive(pyftpdlib)",
+  "environment": "rt15 (127.0.0.15)",
+  "interface": "lo",
+  "mode": "passive",
+  "scenario_family": "activity",
+  "attempts": 1,
+  "duration_s": 0.0015,
+  "packet_count": 35,
+  "capture_timestamp": "2026-08-16T12:49:39.322138+00:00",
+  "source": "127.0.0.15",
+  "destination": "127.0.0.15:2440",
+  "capture_command": "tcpdump -i lo -w <pcap> -U -n 'host 127.0.0.15 and (tcp port 2440 or tcp port 20 or tcp portrange 62120-62159)'",
+  "verification_status": "valid",
+  "detail": {
+    "attempts": 1,
+    "successes": 1,
+    "client_rc": 0,
+    "check_errors": []
+  }
+}

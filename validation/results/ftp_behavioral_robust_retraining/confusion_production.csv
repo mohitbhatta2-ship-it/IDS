@@ -1,0 +1,4 @@
+,Benign,FTP-BruteForce,Infilteration
+Benign,90,0,2
+FTP-BruteForce,64,0,14
+Infilteration,0,0,0

@@ -1,0 +1,26 @@
+{
+  "capture_id": "benign_13",
+  "scenario": "failed_then_disconnect_2",
+  "label": "Benign",
+  "client": "python-ftplib",
+  "server": "permissive(pyftpdlib)",
+  "environment": "rt14 (127.0.0.14)",
+  "interface": "lo",
+  "mode": "passive",
+  "scenario_family": "gave_up",
+  "attempts": 2,
+  "duration_s": 0.001,
+  "packet_count": 17,
+  "capture_timestamp": "2026-08-16T12:49:09.837428+00:00",
+  "source": "127.0.0.14",
+  "destination": "127.0.0.14:2440",
+  "capture_command": "tcpdump -i lo -w <pcap> -U -n 'host 127.0.0.14 and (tcp port 2440 or tcp port 20 or tcp portrange 62040-62079)'",
+  "verification_status": "valid",
+  "detail": {
+    "attempts": 2,
+    "successes": 0,
+    "failures": 2,
+    "label_reason": "benign_gave_up",
+    "check_errors": []
+  }
+}
