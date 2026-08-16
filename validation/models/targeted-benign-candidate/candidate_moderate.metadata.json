@@ -1,0 +1,19 @@
+{
+  "candidate": "targeted_benign_weight_moderate",
+  "seed": 42,
+  "benign_weight": 5.0,
+  "train": "full CIC + v2 real + targeted benign",
+  "train_manifest": {
+    "cic_rows": 281295,
+    "v2_real_rows": 854,
+    "targeted_benign_rows": 215,
+    "v2_ftp_rows": 671,
+    "v2_benign_rows": 183,
+    "excluded_v2_captures": [],
+    "benign_weight": 5.0,
+    "targeted_total_weight": 1075.0
+  },
+  "cic_accuracy": 0.979730471126894,
+  "cic_macro_f1": 0.8545006935377195,
+  "scaler": null
+}

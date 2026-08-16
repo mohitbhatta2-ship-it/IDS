@@ -1,0 +1,4 @@
+model,global_top5,test_ftp_top5,test_benign_top5,artifact_in_global_top5
+production,Dst Port;Init Fwd Win Byts;Fwd Seg Size Min;Flow IAT Min;Fwd Pkts/s,Dst Port;Fwd Seg Size Min;Init Fwd Win Byts;Fwd Pkts/s;Flow Pkts/s,Dst Port;Fwd Seg Size Min;Init Fwd Win Byts;Fwd Pkts/s;Flow Pkts/s,True
+candidate2,Fwd Seg Size Min;Init Fwd Win Byts;Dst Port;Fwd IAT Min;Fwd Pkts/s,Fwd Seg Size Min;Dst Port;Init Fwd Win Byts;Fwd Pkts/s;Fwd IAT Min,Dst Port;Fwd Seg Size Min;Init Fwd Win Byts;Fwd Pkts/s;Fwd IAT Min,True
+targeted_strong,Dst Port;Init Fwd Win Byts;Fwd Seg Size Min;Flow IAT Min;Fwd IAT Min,Dst Port;Fwd Seg Size Min;Init Fwd Win Byts;Fwd IAT Min;Flow Pkts/s,Dst Port;Fwd Seg Size Min;Init Fwd Win Byts;Fwd IAT Min;Flow Pkts/s,True

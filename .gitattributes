@@ -4,3 +4,6 @@
 # Experimental candidate models: store as normal blobs (LFS push is not available here)
 validation/models/realistic_pcap_candidate/model.pkl !filter !diff !merge
 validation/models/realistic_pcap_candidate_v2/*.pkl !filter !diff !merge
+
+# Targeted-benign candidate models: store as normal blobs (LFS push unavailable here)
+validation/models/targeted-benign-candidate/*.pkl !filter !diff !merge

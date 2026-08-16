@@ -2555,3 +2555,99 @@ class TargetedBenignArtifactTests(TestCase):
         model, _ = ml._load("histgradientboosting")
         acc = float((model.predict(test[ml.FEATURES]) == test["Label"]).mean())
         self.assertAlmostEqual(acc, 0.9803, places=4)
+
+
+# ---------------------------------------------------------------------------
+# Targeted-benign retraining experiment (candidate only; frozen models)
+# ---------------------------------------------------------------------------
+
+from predictor import retraining_targeted as _tr
+
+_TBR_RESULTS = _P2(__file__).resolve().parents[2] / "validation" / "results" / "targeted_benign_retraining"
+_HAS_TBR = (_TBR_RESULTS / "final_verdict.json").is_file()
+_TBR_READY = _SCAPY and _train_parquet() is not None and _TGT_DIR.is_dir() \
+    and (_TGT_DIR / "MANIFEST.csv").is_file()
+
+
+@skipUnless(_TBR_READY, "scapy + parquet + targeted corpus required")
+class TargetedRetrainModuleTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        live_capture._ensure_live_on_path()
+        cls.tgt = _tr.extract_targeted_benign_flows()
+        cls.v2 = _tr.r2.extract_real_flows_v2()
+        X, y = _tr.rt.load_cic()
+        cls.cic_X, cls.cic_y = _tr.r2.stratified_cic_subsample(X, y, 2000)
+
+    def test_targeted_flows_are_benign_thirty_ordered_finite(self):
+        df = self.tgt.df
+        self.assertEqual(len(self.tgt.invalid), 0)               # no zero-fill
+        self.assertEqual(set(df["Label"]), {"Benign"})           # labels from folder
+        feat = [c for c in df.columns if c in ml.FEATURES]
+        self.assertEqual(feat, list(ml.FEATURES))                # order
+        self.assertEqual(len(feat), 30)
+        self.assertTrue(_np.isfinite(df[ml.FEATURES].to_numpy()).all())
+
+    def test_assemble_uses_exactly_ml_features_in_order(self):
+        X, y, w, man = _tr.assemble(self.cic_X, self.cic_y, self.v2.df, self.tgt.df, benign_weight=5.0)
+        self.assertEqual(list(X.columns), list(ml.FEATURES))
+        # targeted benign tail is the one that carries the benign weight
+        self.assertEqual(man["targeted_benign_rows"], len(self.tgt.df))
+        self.assertAlmostEqual(man["targeted_total_weight"], len(self.tgt.df) * 5.0, places=3)
+
+    def test_loco_has_no_flow_overlap_between_train_and_test(self):
+        caps = self.v2.captures[:2] + self.v2.captures[-2:]
+        subset = _tr.r2.RealFlows(
+            df=self.v2.df[self.v2.df["capture"].isin(caps)].reset_index(drop=True), invalid=[])
+        loco = _tr.leave_one_capture_out(self.cic_X, self.cic_y, subset, self.tgt.df, benign_weight=5.0)
+        self.assertEqual(len(loco["folds"]), len(caps))          # assert inside raises on leak
+
+    def test_no_independent_pcap_in_training_sources(self):
+        base = _P2(__file__).resolve().parents[2] / "validation"
+        indep = _pcap_sha_set(base / "independent_real_pcaps")
+        train = _pcap_sha_set(base / "realistic_pcaps_v2") | _pcap_sha_set(base / "targeted_benign_pcaps")
+        self.assertTrue(indep.isdisjoint(train))
+
+    def test_candidate_dir_separate_from_production(self):
+        self.assertNotIn(str(ml.MODELS_DIR.resolve()), str(_tr.candidate_dir().resolve()))
+
+
+@skipUnless(_HAS_TBR, "committed targeted_benign_retraining results not present")
+class TargetedRetrainResultsTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.verdict = json.loads((_TBR_RESULTS / "final_verdict.json").read_text())
+        cls.hashes = json.loads((_TBR_RESULTS / "model_hashes_before_after.json").read_text())
+        cls.leak = json.loads((_TBR_RESULTS / "leakage_validation.json").read_text())
+
+    def test_frozen_artifacts_unchanged(self):
+        self.assertTrue(self.hashes["unchanged"])
+        self.assertEqual(self.hashes["before"], self.hashes["after"])
+
+    def test_selection_did_not_use_independent_test(self):
+        self.assertIn("CIC held-out + v2 LOCO", self.verdict["candidate_selection_basis"])
+
+    def test_verdict_has_promote_flag(self):
+        self.assertIn(self.verdict["promote"], (True, False))
+        self.assertIn(self.verdict["decision"].split()[0], ("PROMOTE", "DO"))
+
+    def test_leakage_flags(self):
+        self.assertTrue(self.leak["independent_disjoint_from_training"])
+        self.assertTrue(self.leak["no_zero_fill"])
+        self.assertEqual(self.leak["n_features"], 30)
+
+    def test_required_evidence_files_exist(self):
+        for name in ("candidate_metrics.csv", "baseline_metrics.csv", "per_class_metrics.csv",
+                     "per_capture_v2loco_metrics.csv", "independent_test_metrics.csv",
+                     "weighting_comparison.csv", "confidence_distribution.csv",
+                     "bootstrap_ci_results.csv", "leakage_validation.json",
+                     "model_hashes_before_after.json", "final_verdict.json", "report.md"):
+            self.assertTrue((_TBR_RESULTS / name).is_file(), name)
+
+    def test_production_still_scores_known_number(self):
+        test = pd.read_parquet(ml.DATA_ROOT / "Processed_Data" / "test_selected.parquet")
+        model, _ = ml._load("histgradientboosting")
+        acc = float((model.predict(test[ml.FEATURES]) == test["Label"]).mean())
+        self.assertAlmostEqual(acc, 0.9803, places=4)
