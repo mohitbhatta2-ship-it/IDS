@@ -1,0 +1,41 @@
+{
+  "capture_id": "ftpbf_26",
+  "label": "FTP-BruteForce",
+  "scenario": "curl_many",
+  "client": "curl",
+  "server": "pyftpdlib:permissive",
+  "environment": "env_b (127.0.0.2)",
+  "interface": "lo",
+  "mode": "passive",
+  "attempts": 12,
+  "start_time": "2026-08-16T01:50:52.743106+00:00",
+  "end_time": "2026-08-16T01:50:54.501456+00:00",
+  "packet_count": 156,
+  "duration_s": 0.0641,
+  "source": "127.0.0.2",
+  "destination": "127.0.0.2:2121",
+  "capture_command": "tcpdump -i lo -w <pcap> -U -n 'host 127.0.0.2 and (tcp port 2121 or tcp port 20 or tcp portrange 60160-60199)'",
+  "verification_status": "valid",
+  "detail": {
+    "attempts": 12,
+    "successes": 0,
+    "failures": 12,
+    "distinct_usernames": 3,
+    "pattern": "curl_new_conn",
+    "wall_duration_s": 0.871,
+    "check": {
+      "pcap": "ftpbf_26_curl_curl_many.pcap",
+      "exists": true,
+      "readable": true,
+      "packets": 156,
+      "has_ftp_traffic": true,
+      "loopback_only": true,
+      "expected_host_present": true,
+      "tcp_only": true,
+      "port_ok": true,
+      "duration_s": 0.06409096717834473,
+      "duration_valid": true
+    },
+    "check_errors": []
+  }
+}

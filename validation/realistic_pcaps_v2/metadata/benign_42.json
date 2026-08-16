@@ -1,0 +1,38 @@
+{
+  "capture_id": "benign_42",
+  "label": "Benign",
+  "scenario": "raw_socket_login",
+  "client": "raw-socket",
+  "server": "pyftpdlib:permissive",
+  "environment": "env_c (127.0.0.3)",
+  "interface": "lo",
+  "mode": "passive",
+  "attempts": 1,
+  "start_time": "2026-08-16T01:49:16.612435+00:00",
+  "end_time": "2026-08-16T01:49:18.308271+00:00",
+  "packet_count": 18,
+  "duration_s": 0.0009,
+  "source": "127.0.0.3",
+  "destination": "127.0.0.3:2121",
+  "capture_command": "tcpdump -i lo -w <pcap> -U -n 'host 127.0.0.3 and (tcp port 2121 or tcp port 20 or tcp portrange 60280-60319)'",
+  "verification_status": "valid",
+  "detail": {
+    "attempts": 1,
+    "successes": 1,
+    "wall_duration_s": 0.801,
+    "check": {
+      "pcap": "benign_42_raw-socket_raw_socket_login.pcap",
+      "exists": true,
+      "readable": true,
+      "packets": 18,
+      "has_ftp_traffic": true,
+      "loopback_only": true,
+      "expected_host_present": true,
+      "tcp_only": true,
+      "port_ok": true,
+      "duration_s": 0.0009369850158691406,
+      "duration_valid": true
+    },
+    "check_errors": []
+  }
+}

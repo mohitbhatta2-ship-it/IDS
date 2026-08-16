@@ -1,0 +1,41 @@
+{
+  "capture_id": "ftpbf_03",
+  "label": "FTP-BruteForce",
+  "scenario": "medium_pacing_defended_server",
+  "client": "python-ftplib",
+  "server": "pyftpdlib:ratelimited",
+  "environment": "env_c (127.0.0.3)",
+  "interface": "lo",
+  "mode": "passive",
+  "attempts": 5,
+  "start_time": "2026-08-16T01:49:39.960245+00:00",
+  "end_time": "2026-08-16T01:49:56.672346+00:00",
+  "packet_count": 87,
+  "duration_s": 15.0208,
+  "source": "127.0.0.3",
+  "destination": "127.0.0.3:21",
+  "capture_command": "tcpdump -i lo -w <pcap> -U -n 'host 127.0.0.3 and (tcp port 21 or tcp port 20 or tcp portrange 60240-60279)'",
+  "verification_status": "valid",
+  "detail": {
+    "attempts": 5,
+    "successes": 0,
+    "failures": 5,
+    "distinct_usernames": 1,
+    "pattern": "new_conn",
+    "wall_duration_s": 15.821,
+    "check": {
+      "pcap": "ftpbf_03_python-ftplib_medium_pacing_defended_server.pcap",
+      "exists": true,
+      "readable": true,
+      "packets": 87,
+      "has_ftp_traffic": true,
+      "loopback_only": true,
+      "expected_host_present": true,
+      "tcp_only": true,
+      "port_ok": true,
+      "duration_s": 15.020841836929321,
+      "duration_valid": true
+    },
+    "check_errors": []
+  }
+}

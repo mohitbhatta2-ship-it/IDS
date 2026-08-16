@@ -1,0 +1,41 @@
+{
+  "capture_id": "ftpbf_35",
+  "label": "FTP-BruteForce",
+  "scenario": "valid_user_wrong_pw_curl",
+  "client": "curl",
+  "server": "pyftpdlib:permissive",
+  "environment": "env_b (127.0.0.2)",
+  "interface": "lo",
+  "mode": "passive",
+  "attempts": 8,
+  "start_time": "2026-08-16T01:51:26.251797+00:00",
+  "end_time": "2026-08-16T01:51:27.981715+00:00",
+  "packet_count": 104,
+  "duration_s": 0.0433,
+  "source": "127.0.0.2",
+  "destination": "127.0.0.2:2121",
+  "capture_command": "tcpdump -i lo -w <pcap> -U -n 'host 127.0.0.2 and (tcp port 2121 or tcp port 20 or tcp portrange 60160-60199)'",
+  "verification_status": "valid",
+  "detail": {
+    "attempts": 8,
+    "successes": 0,
+    "failures": 8,
+    "distinct_usernames": 1,
+    "pattern": "curl_new_conn",
+    "wall_duration_s": 0.85,
+    "check": {
+      "pcap": "ftpbf_35_curl_valid_user_wrong_pw_curl.pcap",
+      "exists": true,
+      "readable": true,
+      "packets": 104,
+      "has_ftp_traffic": true,
+      "loopback_only": true,
+      "expected_host_present": true,
+      "tcp_only": true,
+      "port_ok": true,
+      "duration_s": 0.04331517219543457,
+      "duration_valid": true
+    },
+    "check_errors": []
+  }
+}

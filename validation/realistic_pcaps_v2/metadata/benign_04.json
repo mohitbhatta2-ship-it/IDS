@@ -1,0 +1,39 @@
+{
+  "capture_id": "benign_04",
+  "label": "Benign",
+  "scenario": "failed_then_successful_login",
+  "client": "python-ftplib",
+  "server": "pyftpdlib:ratelimited",
+  "environment": "env_a (127.0.0.1)",
+  "interface": "lo",
+  "mode": "active",
+  "attempts": 2,
+  "start_time": "2026-08-16T01:48:08.416780+00:00",
+  "end_time": "2026-08-16T01:48:13.117183+00:00",
+  "packet_count": 29,
+  "duration_s": 3.0053,
+  "source": "127.0.0.1",
+  "destination": "127.0.0.1:21",
+  "capture_command": "tcpdump -i lo -w <pcap> -U -n 'host 127.0.0.1 and (tcp port 21 or tcp port 20 or tcp portrange 60000-60039)'",
+  "verification_status": "valid",
+  "detail": {
+    "attempts": 2,
+    "successes": 1,
+    "failed_benign_logins": 1,
+    "wall_duration_s": 3.806,
+    "check": {
+      "pcap": "benign_04_python-ftplib_failed_then_successful_login.pcap",
+      "exists": true,
+      "readable": true,
+      "packets": 29,
+      "has_ftp_traffic": true,
+      "loopback_only": true,
+      "expected_host_present": true,
+      "tcp_only": true,
+      "port_ok": true,
+      "duration_s": 3.0052621364593506,
+      "duration_valid": true
+    },
+    "check_errors": []
+  }
+}

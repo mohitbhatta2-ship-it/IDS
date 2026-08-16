@@ -1,0 +1,54 @@
+{
+  "experiment": "realistic_pcap_diversification_v2",
+  "created_utc": "2026-08-16T01:51:49.186891+00:00",
+  "retrained": false,
+  "labels_from": "scenario folder (never model predictions)",
+  "loopback_only": true,
+  "pcap_count": 83,
+  "benign_count": 42,
+  "ftp_bruteforce_count": 41,
+  "captures_passing_verification": 83,
+  "total_flows_extracted": 854,
+  "total_incomplete_flows_reported": 0,
+  "n_model_features": 30,
+  "diversity": {
+    "by_client": {
+      "python-ftplib": 53,
+      "curl": 17,
+      "wget": 4,
+      "raw-socket": 9
+    },
+    "by_server": {
+      "pyftpdlib:ratelimited": 17,
+      "pyftpdlib:permissive": 45,
+      "pyftpdlib:throttled": 21
+    },
+    "by_environment": {
+      "env_a (127.0.0.1)": 28,
+      "env_b (127.0.0.2)": 28,
+      "env_c (127.0.0.3)": 27
+    },
+    "by_mode": {
+      "passive": 57,
+      "active": 26
+    },
+    "distinct_scenarios": 51
+  },
+  "clients": [
+    "python-ftplib",
+    "curl",
+    "wget",
+    "raw-socket"
+  ],
+  "server_note": "one FTP server package (pyftpdlib) run in three real behavioural variants: rate-limited (defended), permissive, throttled bandwidth. Not multiple daemons; documented as such.",
+  "tls_note": "TLS/FTPS variant not included: pyOpenSSL unavailable in this env.",
+  "versions": {
+    "python": "3.11.15"
+  },
+  "limitations": [
+    "Loopback lab only (single host); addresses vary but the network is local.",
+    "One server package (pyftpdlib) with real config variants; no second FTP daemon.",
+    "No FTPS/TLS (dependency unavailable).",
+    "Still exploratory relative to real-world traffic diversity."
+  ]
+}

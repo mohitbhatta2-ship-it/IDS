@@ -1,0 +1,42 @@
+{
+  "capture_id": "ftpbf_21",
+  "label": "FTP-BruteForce",
+  "scenario": "raw_pipelined_valid_user",
+  "client": "raw-socket",
+  "server": "pyftpdlib:permissive",
+  "environment": "env_c (127.0.0.3)",
+  "interface": "lo",
+  "mode": "passive",
+  "attempts": 16,
+  "start_time": "2026-08-16T01:50:44.123377+00:00",
+  "end_time": "2026-08-16T01:50:45.826428+00:00",
+  "packet_count": 74,
+  "duration_s": 0.0031,
+  "source": "127.0.0.3",
+  "destination": "127.0.0.3:2121",
+  "capture_command": "tcpdump -i lo -w <pcap> -U -n 'host 127.0.0.3 and (tcp port 2121 or tcp port 20 or tcp portrange 60280-60319)'",
+  "verification_status": "valid",
+  "detail": {
+    "attempts": 16,
+    "successes": 0,
+    "failures": 16,
+    "distinct_usernames": 1,
+    "pattern": "raw_pipelined",
+    "reconnects": 0,
+    "wall_duration_s": 0.804,
+    "check": {
+      "pcap": "ftpbf_21_raw-socket_raw_pipelined_valid_user.pcap",
+      "exists": true,
+      "readable": true,
+      "packets": 74,
+      "has_ftp_traffic": true,
+      "loopback_only": true,
+      "expected_host_present": true,
+      "tcp_only": true,
+      "port_ok": true,
+      "duration_s": 0.0030999183654785156,
+      "duration_valid": true
+    },
+    "check_errors": []
+  }
+}

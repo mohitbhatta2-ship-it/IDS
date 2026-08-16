@@ -1735,3 +1735,224 @@ class CollectedExpansionArtifactTests(TestCase):
                 self.assertIsNone(pv._feature_problem(fl["features"]))
                 ordered = [float(fl["features"][f]) for f in ml.FEATURES]
                 self.assertEqual(len(ordered), 30)
+
+
+# ---------------------------------------------------------------------------
+# Realistic-PCAP DIVERSIFICATION v2 — multi-client/server/env capture framework
+# ---------------------------------------------------------------------------
+
+import hashlib as _hashlib
+from predictor import lab_capture_v2 as _lab2
+
+_V2_DIR = _P2(__file__).resolve().parents[2] / "validation" / "realistic_pcaps_v2"
+_HAS_V2 = (_V2_DIR / "MANIFEST.csv").is_file()
+
+
+class LabCaptureV2FrameworkTests(TestCase):
+    """v2 framework invariants (no live capture required)."""
+
+    def test_all_environments_are_loopback_net(self):
+        for addr in _lab2.ENV_ADDR.values():
+            self.assertTrue(_lab2.V2Target(addr, 21, 60000, 60040, "permissive", "e")
+                            .is_loopback_net())
+
+    def test_non_loopback_target_is_rejected_by_is_loopback_net(self):
+        self.assertFalse(_lab2.V2Target("8.8.8.8", 21, 60000, 60040, "permissive", "e")
+                         .is_loopback_net())
+
+    def test_bpf_confines_to_host_and_ports(self):
+        t = _lab2.V2Target("127.0.0.2", 21, 60000, 60039, "permissive", "env_b")
+        bpf = t.bpf()
+        self.assertIn("host 127.0.0.2", bpf)
+        self.assertIn("tcp port 21", bpf)
+        self.assertIn("portrange 60000-60039", bpf)
+
+    def test_build_targets_are_all_loopback_and_unique(self):
+        targets = _lab2.build_targets(Path("/tmp/nonexistent"))
+        self.assertEqual(len(targets), len(_lab2.ENV_ADDR) * len(_lab2.SERVER_VARIANTS))
+        for t in targets.values():
+            self.assertTrue(t.is_loopback_net())
+        ranges = [(t.addr, t.passive_lo) for t in targets.values()]
+        self.assertEqual(len(ranges), len(set(ranges)))   # no passive-range clash
+
+    def test_spec_counts_in_target_range(self):
+        b, f = _lab2.benign_specs(), _lab2.bruteforce_specs()
+        self.assertTrue(30 <= len(b) <= 50, len(b))
+        self.assertTrue(30 <= len(f) <= 50, len(f))
+
+    def test_specs_are_distinct_combinations(self):
+        specs = _lab2.benign_specs() + _lab2.bruteforce_specs()
+        keys = [(s.label, s.scenario, s.client, s.server, s.env, s.mode) for s in specs]
+        self.assertEqual(len(keys), len(set(keys)))       # no duplicate spec
+
+    def test_diversity_spans_multiple_clients_and_servers(self):
+        specs = _lab2.benign_specs() + _lab2.bruteforce_specs()
+        self.assertGreaterEqual(len({s.client for s in specs}), 3)
+        self.assertGreaterEqual(len({s.server for s in specs}), 3)
+        self.assertGreaterEqual(len({s.env for s in specs}), 3)
+
+    def test_bruteforce_pool_never_contains_real_password(self):
+        self.assertNotIn(_lab2.PASSWORD, _lab2.WRONG_PW)
+
+    def test_manifest_columns_cover_required_fields(self):
+        for field_ in ("scenario", "label", "client", "server", "environment",
+                       "interface", "attempts", "start_time", "end_time",
+                       "packet_count", "duration_s", "source", "destination",
+                       "capture_command", "verification_status"):
+            self.assertIn(field_, _lab2.MANIFEST_COLUMNS)
+
+
+@skipUnless(_CAN_CAPTURE, "needs root + tcpdump + pyftpdlib + scapy")
+class LabCaptureV2LiveTests(TestCase):
+    """Prove v2 captures are real, independent, loopback-only, no external dest."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.tmp = Path(tempfile.mkdtemp())
+        # use a non-privileged port + env_a for the live test server
+        cls.target = _lab2.V2Target("127.0.0.1", 2399, 61000, 61039, "permissive", "env_a")
+        cls.pool = _lab2.ServerPool({("env_a", "permissive"): cls.target}, cls.tmp / "home")
+        cls.pool.get("env_a", "permissive")
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.pool.stop_all()
+        _shutil.rmtree(cls.tmp, ignore_errors=True)
+        super().tearDownClass()
+
+    def _cap(self, name, fn):
+        pcap = self.tmp / f"{name}.pcap"
+        cap = _lab2.Tcpdump(pcap_path=pcap, target=self.target).start()
+        try:
+            stats = fn(self.target)
+        finally:
+            cap.stop()
+        return pcap, stats
+
+    def test_benign_capture_is_real_and_loopback_only(self):
+        pcap, _ = self._cap("b", _lab2.b_list)
+        chk = _lab2.verify_pcap(pcap, self.target)
+        self.assertTrue(chk.ok, chk.errors)
+        self.assertTrue(chk.loopback_only and chk.expected_host_present)
+
+    def test_bruteforce_capture_only_fails(self):
+        pcap, stats = self._cap("bf", lambda t: _lab2.bf_newconn(
+            t, [("admin", pw) for pw in _lab2.WRONG_PW[:4]]))
+        chk = _lab2.verify_pcap(pcap, self.target)
+        self.assertTrue(chk.ok, chk.errors)
+        self.assertEqual(stats["successes"], 0)
+        self.assertEqual(stats["failures"], 4)
+
+    def test_two_captures_are_independent_not_copies(self):
+        p1, _ = self._cap("i1", _lab2.b_login)
+        p2, _ = self._cap("i2", _lab2.b_login)
+        self.assertNotEqual(p1.read_bytes(), p2.read_bytes())
+        from scapy.all import rdpcap, TCP
+        s1 = {pk[TCP].sport for pk in rdpcap(str(p1)) if TCP in pk}
+        s2 = {pk[TCP].sport for pk in rdpcap(str(p2)) if TCP in pk}
+        self.assertNotEqual(s1, s2)                        # fresh ephemeral ports
+
+    def test_bruteforce_refuses_non_loopback_destination(self):
+        # safety: the brute-force drivers assert a loopback target before any traffic
+        external = _lab2.V2Target("93.184.216.34", 21, 61000, 61039, "permissive", "x")
+        with self.assertRaises(AssertionError):
+            _lab2.bf_newconn(external, [("admin", "x")])
+
+
+@skipUnless(_HAS_V2, "collected realistic_pcaps_v2/ not present")
+class CollectedV2ArtifactTests(TestCase):
+    """Validate the committed v2 corpus + that baseline artifacts are untouched."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        with (_V2_DIR / "MANIFEST.csv").open() as f:
+            cls.rows = list(csv.DictReader(f))
+
+    def _pcap_for(self, row):
+        folder = "benign" if row["label"] == "Benign" else "ftp_bruteforce"
+        return next((_V2_DIR / folder).glob(f"{row['capture_id']}_*.pcap"))
+
+    def test_manifest_has_required_columns(self):
+        self.assertTrue(self.rows)
+        self.assertEqual(set(self.rows[0].keys()), set(_lab2.MANIFEST_COLUMNS))
+
+    def test_counts_in_target_range(self):
+        benign = [r for r in self.rows if r["label"] == "Benign"]
+        bf = [r for r in self.rows if r["label"] == "FTP-BruteForce"]
+        self.assertTrue(30 <= len(benign) <= 50, len(benign))
+        self.assertTrue(30 <= len(bf) <= 50, len(bf))
+
+    def test_every_manifest_pcap_exists(self):
+        for r in self.rows:
+            self.assertTrue(self._pcap_for(r).is_file(), r["capture_id"])
+
+    def test_no_duplicate_pcaps(self):
+        hashes = {}
+        for p in _V2_DIR.rglob("*.pcap"):
+            h = _hashlib.sha256(p.read_bytes()).hexdigest()
+            self.assertNotIn(h, hashes, f"{p.name} duplicates {hashes.get(h)}")
+            hashes[h] = p.name
+
+    def test_labels_from_folders_only(self):
+        for r in self.rows:
+            folder = "benign" if r["label"] == "Benign" else "ftp_bruteforce"
+            self.assertTrue(self._pcap_for(r).parent.name == folder)
+            self.assertIn(r["label"], ("Benign", "FTP-BruteForce"))
+
+    def test_all_captures_passed_verification(self):
+        for r in self.rows:
+            self.assertEqual(r["verification_status"], "valid", r["capture_id"])
+
+    def test_all_destinations_are_loopback(self):
+        import ipaddress
+        loop = ipaddress.ip_network("127.0.0.0/8")
+        for r in self.rows:
+            addr = r["destination"].rsplit(":", 1)[0]
+            self.assertIn(ipaddress.ip_address(addr), loop, r["destination"])
+
+    def test_diversity_present(self):
+        self.assertGreaterEqual(len({r["client"] for r in self.rows}), 3)
+        self.assertGreaterEqual(len({r["server"] for r in self.rows}), 3)
+        self.assertGreaterEqual(len({r["environment"] for r in self.rows}), 3)
+
+    def test_feature_extraction_report_has_no_incomplete_flows(self):
+        with (_V2_DIR / "feature_extraction_report.csv").open() as f:
+            rows = list(csv.DictReader(f))
+        self.assertTrue(rows)
+        self.assertEqual(sum(int(r["incomplete_flows"]) for r in rows), 0)
+        self.assertGreater(sum(int(r["flows"]) for r in rows), 0)
+
+    @skipUnless(_SCAPY, "scapy required")
+    def test_sample_captures_extract_exactly_thirty_finite_ordered_features(self):
+        from predictor import pcap_validation as pv
+        live_capture._ensure_live_on_path()
+        import ipaddress
+        sample = [r for r in self.rows if r["capture_id"] in
+                  ("benign_01", "benign_20", "ftpbf_01", "ftpbf_15")]
+        self.assertTrue(sample)
+        for r in sample:
+            pcap = self._pcap_for(r)
+            addr = r["destination"].rsplit(":", 1)[0]
+            port = int(r["destination"].rsplit(":", 1)[1])
+            t = _lab2.V2Target(addr, port, 60000, 60040, "x", r["environment"])
+            chk = _lab2.verify_pcap(pcap, t)
+            self.assertTrue(chk.ok, chk.errors)
+            for fl in pv.replay_pcap(pcap):
+                self.assertIsNone(pv._feature_problem(fl["features"]))   # 30, finite
+                self.assertEqual([f for f in fl["features"] if f in ml.FEATURES].__len__(), 30)
+                ordered = [float(fl["features"][f]) for f in ml.FEATURES]
+                self.assertTrue(all(_np.isfinite(ordered)))
+
+    def test_production_and_baseline_artifacts_untouched(self):
+        # production model still scores its known CIC number
+        test = pd.read_parquet(ml.DATA_ROOT / "Processed_Data" / "test_selected.parquet")
+        model, _ = ml._load("histgradientboosting")
+        acc = float((model.predict(test[ml.FEATURES]) == test["Label"]).mean())
+        self.assertAlmostEqual(acc, 0.9803, places=4)
+        # v1 collection + frozen validation results still present and non-empty
+        v1 = _P2(__file__).resolve().parents[2] / "validation"
+        for rel in ("realistic_pcaps/MANIFEST.csv", "results/flows.csv"):
+            p = v1 / rel
+            self.assertTrue(p.is_file() and p.stat().st_size > 0, str(p))

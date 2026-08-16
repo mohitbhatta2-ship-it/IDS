@@ -1,0 +1,39 @@
+{
+  "capture_id": "benign_30",
+  "label": "Benign",
+  "scenario": "download",
+  "client": "curl",
+  "server": "pyftpdlib:permissive",
+  "environment": "env_c (127.0.0.3)",
+  "interface": "lo",
+  "mode": "active",
+  "attempts": 1,
+  "start_time": "2026-08-16T01:48:56.085662+00:00",
+  "end_time": "2026-08-16T01:48:57.794563+00:00",
+  "packet_count": 35,
+  "duration_s": 0.0026,
+  "source": "127.0.0.3",
+  "destination": "127.0.0.3:2121",
+  "capture_command": "tcpdump -i lo -w <pcap> -U -n 'host 127.0.0.3 and (tcp port 2121 or tcp port 20 or tcp portrange 60280-60319)'",
+  "verification_status": "valid",
+  "detail": {
+    "attempts": 1,
+    "successes": 1,
+    "client_rc": 0,
+    "wall_duration_s": 0.815,
+    "check": {
+      "pcap": "benign_30_curl_download.pcap",
+      "exists": true,
+      "readable": true,
+      "packets": 35,
+      "has_ftp_traffic": true,
+      "loopback_only": true,
+      "expected_host_present": true,
+      "tcp_only": true,
+      "port_ok": true,
+      "duration_s": 0.0026009082794189453,
+      "duration_valid": true
+    },
+    "check_errors": []
+  }
+}
