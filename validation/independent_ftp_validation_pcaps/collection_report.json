@@ -1,0 +1,81 @@
+{
+  "experiment": "independent_ftp_validation_corpus",
+  "created_utc": "2026-08-16T14:28:10.240518+00:00",
+  "purpose": "Independent test of the robust behavioural candidate on a genuinely different stack.",
+  "test_only": true,
+  "labels_from": "scenario folder (never predictions)",
+  "server": "vsFTPd (real; not used in any prior corpus)",
+  "client_new": "lftp",
+  "network": "veth + ip netns 10.77.0.0/24 (non-loopback, server 10.77.0.2)",
+  "pcap_count": 28,
+  "benign_count": 16,
+  "ftp_bruteforce_count": 12,
+  "encrypted_ftps_count": 4,
+  "captures_passing_verification": 28,
+  "total_flows": 162,
+  "total_incomplete_flows": 0,
+  "diversity": {
+    "by_scenario_family": {
+      "clean": 2,
+      "mistype": 3,
+      "gave_up": 2,
+      "activity": 5,
+      "reconnect": 1,
+      "multi_user": 1,
+      "slow_brute": 2,
+      "fast_brute": 3,
+      "user_enum": 1,
+      "eventual_success": 2,
+      "multi_conn": 2,
+      "tls_benign": 2,
+      "tls_brute": 2
+    },
+    "by_client": {
+      "lftp": 7,
+      "python-ftplib": 10,
+      "raw-socket": 5,
+      "curl": 2,
+      "curl-ftps": 4
+    },
+    "by_server": {
+      "vsftpd(plaintext)": 24,
+      "vsftpd(tls)": 4
+    },
+    "by_mode": {
+      "passive": 27,
+      "active": 1
+    },
+    "by_environment": {
+      "netns-veth-plaintext": 24,
+      "netns-veth-ftps": 4
+    }
+  },
+  "leakage": {
+    "all_pass": true,
+    "checks": {
+      "disjoint_from_v1": true,
+      "disjoint_from_v2": true,
+      "disjoint_from_independent": true,
+      "disjoint_from_targeted": true,
+      "disjoint_from_robustness": true,
+      "disjoint_from_robust_train": true,
+      "no_duplicate_within_corpus": true,
+      "labels_only_from_folders": true,
+      "all_verified_valid": true
+    },
+    "n_new": 28
+  },
+  "limitations": [
+    "Single container: cannot run different OS or physical hosts; the netns provides a separate network stack + non-loopback interface, not a separate machine.",
+    "One real server implementation (vsftpd) and cleartext + one FTPS config.",
+    "FTPS captures: behavioural features are genuinely unavailable (encrypted control channel).",
+    "Test-only corpus; never used for training/selection/tuning."
+  ],
+  "versions": {
+    "python": "3.11.15",
+    "vsftpd": "3.0.5-0ubuntu3.1",
+    "lftp": [
+      "LFTP | Version 4.9.2 | Copyright (c) 1996-2020 Alexander V. Lukyanov"
+    ]
+  }
+}

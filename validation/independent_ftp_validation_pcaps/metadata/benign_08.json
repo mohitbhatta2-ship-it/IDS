@@ -1,0 +1,26 @@
+{
+  "capture_id": "benign_08",
+  "scenario": "command_heavy",
+  "label": "Benign",
+  "client": "python-ftplib",
+  "server": "vsftpd(plaintext)",
+  "environment": "netns-veth-plaintext",
+  "interface": "veth-ivh",
+  "mode": "passive",
+  "scenario_family": "activity",
+  "encrypted": false,
+  "attempts": 1,
+  "duration_s": 0.0388,
+  "packet_count": 58,
+  "capture_timestamp": "2026-08-16T14:22:33.278666+00:00",
+  "source": "10.77.0.1",
+  "destination": "10.77.0.2:2121",
+  "capture_command": "tcpdump -i veth-ivh -w <pcap> -U -n 'host 10.77.0.2 and (tcp port 2121 or tcp port 2131 or tcp port 20 or tcp portrange 63000-63199)'",
+  "verification_status": "valid",
+  "detail": {
+    "attempts": 1,
+    "successes": 1,
+    "client": "python-ftplib",
+    "check_errors": []
+  }
+}

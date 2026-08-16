@@ -1,0 +1,28 @@
+{
+  "capture_id": "ftpbf_09",
+  "scenario": "multi_conn_brute_6",
+  "label": "FTP-BruteForce",
+  "client": "lftp",
+  "server": "vsftpd(plaintext)",
+  "environment": "netns-veth-plaintext",
+  "interface": "veth-ivh",
+  "mode": "passive",
+  "scenario_family": "multi_conn",
+  "encrypted": false,
+  "attempts": 6,
+  "duration_s": 19.6513,
+  "packet_count": 188,
+  "capture_timestamp": "2026-08-16T14:26:42.299059+00:00",
+  "source": "10.77.0.1",
+  "destination": "10.77.0.2:2121",
+  "capture_command": "tcpdump -i veth-ivh -w <pcap> -U -n 'host 10.77.0.2 and (tcp port 2121 or tcp port 2131 or tcp port 20 or tcp portrange 63000-63199)'",
+  "verification_status": "valid",
+  "detail": {
+    "attempts": 6,
+    "successes": 0,
+    "failures": 6,
+    "connections": 6,
+    "client": "lftp",
+    "check_errors": []
+  }
+}

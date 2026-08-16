@@ -3193,3 +3193,163 @@ class RobustRetrainResultsTests(TestCase):
         model, _ = ml._load("histgradientboosting")
         acc = float((model.predict(test[ml.FEATURES]) == test["Label"]).mean())
         self.assertAlmostEqual(acc, 0.9803, places=4)
+
+
+# ---------------------------------------------------------------------------
+# Final independent FTP validation (real vsftpd / lftp / non-loopback / FTPS)
+# ---------------------------------------------------------------------------
+
+from predictor import independent_ftp_lab as _ivl
+
+_IV_DIR = _P2(__file__).resolve().parents[2] / "validation" / "independent_ftp_validation_pcaps"
+_HAS_IV = (_IV_DIR / "MANIFEST.csv").is_file()
+_IV_RESULTS = _P2(__file__).resolve().parents[2] / "validation" / "results" / "final_independent_ftp_validation"
+_HAS_IV_RESULTS = (_IV_RESULTS / "final_verdict.json").is_file()
+
+
+class IndependentFtpLabFrameworkTests(TestCase):
+    def test_private_non_loopback_addressing(self):
+        # server address is private (RFC1918) and NOT loopback -> genuinely non-loopback
+        self.assertTrue(_ivl.is_private_lab(_ivl.SERVER_ADDR))
+        self.assertFalse(_ivl.SERVER_ADDR.startswith("127."))
+        self.assertTrue(_ivl.is_private_lab(_ivl.HOST_ADDR))
+
+    def test_ports_disjoint_from_prior_frameworks(self):
+        # new control ports, not the 2330/2340 (robustness) / 2430/2440 (robust_train) used before
+        self.assertEqual({_ivl.PORT_PLAIN, _ivl.PORT_TLS}, {2121, 2131})
+
+    def test_refuses_non_private_target(self):
+        self.assertFalse(_ivl.is_private_lab("8.8.8.8"))
+        self.assertFalse(_ivl.is_private_lab("127.0.0.1"))
+
+    def test_specs_cover_required_scenarios(self):
+        fams = {s.family for s in _ivl.specs()}
+        for f in ("clean", "mistype", "gave_up", "activity", "reconnect", "multi_user",
+                  "slow_brute", "fast_brute", "eventual_success", "multi_conn", "user_enum",
+                  "tls_benign", "tls_brute"):
+            self.assertIn(f, fams)
+
+    def test_uses_new_server_and_client(self):
+        # vsftpd server + lftp client appear; not the prior pyftpdlib/custom servers
+        clients = {s.client for s in _ivl.specs()}
+        self.assertIn("lftp", clients)
+        self.assertIn("curl-ftps", clients)
+
+    def test_encrypted_specs_marked(self):
+        enc = [s for s in _ivl.specs() if s.encrypted]
+        self.assertTrue(enc)
+        for s in enc:
+            self.assertIn("tls", s.family)
+
+
+@skipUnless(_HAS_IV, "independent FTP validation corpus not present")
+class IndependentFtpCorpusArtifactTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        with (_IV_DIR / "MANIFEST.csv").open() as f:
+            cls.rows = list(csv.DictReader(f))
+        cls.base = _P2(__file__).resolve().parents[2] / "validation"
+
+    def test_disjoint_from_all_prior_corpora(self):
+        new = _pcap_sha_set(_IV_DIR)
+        for other in ("realistic_pcaps", "realistic_pcaps_v2", "independent_real_pcaps",
+                      "targeted_benign_pcaps", "robustness_pcaps", "robust_train_pcaps"):
+            self.assertTrue(new.isdisjoint(_pcap_sha_set(self.base / other)), other)
+
+    def test_no_duplicate_pcaps(self):
+        hashes = {}
+        for p in _IV_DIR.rglob("*.pcap"):
+            h = _hashlib.sha256(p.read_bytes()).hexdigest()
+            self.assertNotIn(h, hashes); hashes[h] = p.name
+
+    def test_labels_from_folders(self):
+        for r in self.rows:
+            folder = "benign" if r["label"] == "Benign" else "ftp_bruteforce"
+            self.assertTrue(list((_IV_DIR / folder).glob(f"{r['capture_id']}_*.pcap")))
+            self.assertIn(r["label"], ("Benign", "FTP-BruteForce"))
+
+    def test_all_verified_valid(self):
+        for r in self.rows:
+            self.assertEqual(r["verification_status"], "valid", r["capture_id"])
+
+    def test_captured_on_non_loopback_interface(self):
+        for r in self.rows:
+            self.assertEqual(r["interface"], _ivl.VETH_H)
+            self.assertNotEqual(r["interface"], "lo")
+
+    def test_has_encrypted_ftps_subset(self):
+        enc = [r for r in self.rows if str(r["encrypted"]).lower() == "true"]
+        self.assertGreaterEqual(len(enc), 2)
+
+    @skipUnless(_SCAPY, "scapy")
+    def test_ftps_behavioural_unavailable(self):
+        # encrypted control channel -> the cleartext behavioural parser sees no logins
+        import glob
+        for pcap in glob.glob(str(_IV_DIR / "**" / "*ftps*.pcap"), recursive=True):
+            b = _fb.behavioural_features_for_pcap(pcap)
+            self.assertEqual(b["ftp_login_attempts"], 0.0, pcap)
+            self.assertEqual(b["ftp_failed_logins"], 0.0, pcap)
+
+    @skipUnless(_SCAPY and _train_parquet() is not None, "scapy+parquet")
+    def test_extraction_thirty_ordered_finite_no_zero_fill(self):
+        from predictor import pcap_validation as pv
+        live_capture._ensure_live_on_path()
+        sample = [r for r in self.rows if r["capture_id"] in ("benign_01", "ftpbf_01")]
+        for r in sample:
+            folder = "benign" if r["label"] == "Benign" else "ftp_bruteforce"
+            pcap = next((_IV_DIR / folder).glob(f"{r['capture_id']}_*.pcap"))
+            for fl in pv.replay_pcap(pcap):
+                self.assertIsNone(pv._feature_problem(fl["features"]))
+                self.assertEqual([f for f in fl["features"] if f in ml.FEATURES], list(ml.FEATURES))
+
+
+@skipUnless(_HAS_IV_RESULTS, "committed independent-validation results not present")
+class FinalIndependentValidationResultsTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.verdict = json.loads((_IV_RESULTS / "final_verdict.json").read_text())
+        cls.hashes = json.loads((_IV_RESULTS / "model_hashes_before_after.json").read_text())
+        cls.leak = json.loads((_IV_RESULTS / "leakage_validation.json").read_text())
+
+    def test_verdict_is_one_of_the_four(self):
+        self.assertIn(self.verdict["verdict"], (
+            "ROBUST -- PROMISING FOR PROMOTION REVIEW", "PROMISING -- NEEDS MORE DATA",
+            "NOT ROBUST", "INVALID -- LEAKAGE/INTEGRITY FAILURE"))
+        self.assertFalse(self.verdict["promote"])
+
+    def test_frozen_artifacts_unchanged(self):
+        self.assertTrue(self.hashes["unchanged"])
+        self.assertEqual(self.hashes["before"], self.hashes["after"])
+
+    def test_leakage_and_feature_integrity(self):
+        self.assertTrue(self.leak["all_pass"])
+        c = self.leak["checks"]
+        for k in ("disjoint_from_v1", "disjoint_from_v2", "disjoint_from_independent",
+                  "disjoint_from_targeted", "disjoint_from_robustness", "disjoint_from_robust_train",
+                  "no_duplicate_pcaps", "exactly_45_features", "exactly_30_packet_features",
+                  "packet_feature_order_preserved"):
+            self.assertTrue(c[k], k)
+        self.assertTrue(self.leak["no_zero_fill"])
+        self.assertTrue(self.leak["every_flow_traceable_to_pcap"])
+        self.assertIn("evaluation only", self.leak["used_for"])
+
+    def test_dependence_diagnostics_present(self):
+        dep = self.verdict["dependence"]
+        for k in ("depends_on_ftp_failed_logins", "depends_on_successful_auth",
+                  "depends_on_cic_artifacts", "depends_on_single_app_layer_feature"):
+            self.assertIn(k, dep)
+
+    def test_required_files_exist(self):
+        for name in ("cleartext_metrics.csv", "per_scenario_metrics.csv", "per_client_metrics.csv",
+                     "per_server_metrics.csv", "per_environment_metrics.csv", "confidence_distribution.csv",
+                     "bootstrap_cis.json", "ftps_encrypted_metrics.csv", "leakage_validation.json",
+                     "model_hashes_before_after.json", "evaluation_metadata.json", "final_verdict.json", "report.md"):
+            self.assertTrue((_IV_RESULTS / name).is_file(), name)
+
+    def test_production_unchanged(self):
+        test = pd.read_parquet(ml.DATA_ROOT / "Processed_Data" / "test_selected.parquet")
+        model, _ = ml._load("histgradientboosting")
+        acc = float((model.predict(test[ml.FEATURES]) == test["Label"]).mean())
+        self.assertAlmostEqual(acc, 0.9803, places=4)

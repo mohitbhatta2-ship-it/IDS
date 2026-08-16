@@ -1,0 +1,27 @@
+{
+  "capture_id": "benign_09",
+  "scenario": "reconnect_session",
+  "label": "Benign",
+  "client": "lftp",
+  "server": "vsftpd(plaintext)",
+  "environment": "netns-veth-plaintext",
+  "interface": "veth-ivh",
+  "mode": "passive",
+  "scenario_family": "reconnect",
+  "encrypted": false,
+  "attempts": 2,
+  "duration_s": 0.0806,
+  "packet_count": 92,
+  "capture_timestamp": "2026-08-16T14:22:34.861802+00:00",
+  "source": "10.77.0.1",
+  "destination": "10.77.0.2:2121",
+  "capture_command": "tcpdump -i veth-ivh -w <pcap> -U -n 'host 10.77.0.2 and (tcp port 2121 or tcp port 2131 or tcp port 20 or tcp portrange 63000-63199)'",
+  "verification_status": "valid",
+  "detail": {
+    "attempts": 2,
+    "successes": 1,
+    "reconnects": 1,
+    "client": "lftp",
+    "check_errors": []
+  }
+}

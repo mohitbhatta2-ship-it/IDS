@@ -1,0 +1,28 @@
+{
+  "capture_id": "ftpbf_12",
+  "scenario": "ftps_brute_7",
+  "label": "FTP-BruteForce",
+  "client": "curl-ftps",
+  "server": "vsftpd(tls)",
+  "environment": "netns-veth-ftps",
+  "interface": "veth-ivh",
+  "mode": "passive",
+  "scenario_family": "tls_brute",
+  "encrypted": true,
+  "attempts": 7,
+  "duration_s": 22.7902,
+  "packet_count": 182,
+  "capture_timestamp": "2026-08-16T14:27:44.838825+00:00",
+  "source": "10.77.0.1",
+  "destination": "10.77.0.2:2131",
+  "capture_command": "tcpdump -i veth-ivh -w <pcap> -U -n 'host 10.77.0.2 and (tcp port 2121 or tcp port 2131 or tcp port 20 or tcp portrange 63000-63199)'",
+  "verification_status": "valid",
+  "detail": {
+    "attempts": 7,
+    "successes": 0,
+    "failures": 7,
+    "client": "curl-ftps",
+    "encrypted": true,
+    "check_errors": []
+  }
+}

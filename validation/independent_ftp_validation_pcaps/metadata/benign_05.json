@@ -1,0 +1,27 @@
+{
+  "capture_id": "benign_05",
+  "scenario": "several_wrong_giveup_3",
+  "label": "Benign",
+  "client": "raw-socket",
+  "server": "vsftpd(plaintext)",
+  "environment": "netns-veth-plaintext",
+  "interface": "veth-ivh",
+  "mode": "passive",
+  "scenario_family": "gave_up",
+  "encrypted": false,
+  "attempts": 3,
+  "duration_s": 9.8393,
+  "packet_count": 26,
+  "capture_timestamp": "2026-08-16T14:22:01.886025+00:00",
+  "source": "10.77.0.1",
+  "destination": "10.77.0.2:2121",
+  "capture_command": "tcpdump -i veth-ivh -w <pcap> -U -n 'host 10.77.0.2 and (tcp port 2121 or tcp port 2131 or tcp port 20 or tcp portrange 63000-63199)'",
+  "verification_status": "valid",
+  "detail": {
+    "attempts": 3,
+    "successes": 0,
+    "failures": 3,
+    "client": "raw-socket",
+    "check_errors": []
+  }
+}

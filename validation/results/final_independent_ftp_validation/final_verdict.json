@@ -1,0 +1,186 @@
+{
+  "verdict": "NOT ROBUST",
+  "promote": false,
+  "robust_candidate_cleartext": {
+    "ftp_recall": 1.0,
+    "benign_recall": 0.8524590163934426,
+    "false_positive_rate": 0.14754098360655737,
+    "ftp_precision": 0.8860759493670886,
+    "macro_f1": 0.9299756488685633,
+    "accuracy": 0.9312977099236641
+  },
+  "candidate2_cleartext": {
+    "ftp_recall": 0.08571428571428572,
+    "benign_recall": 0.8524590163934426,
+    "false_positive_rate": 0.14754098360655737,
+    "macro_f1": 0.36437354602858096
+  },
+  "beats_candidate2": true,
+  "meets_thresholds": false,
+  "ci_lower_ftp_recall": 1.0,
+  "ci_lower_benign_recall": 0.653804347826087,
+  "summary": "On genuinely different traffic the robust candidate does NOT meet the criteria (FTP 1.000>=0.70? benign 0.852>=0.90? FPR 0.148<=0.10?; beats C2=True; failed-login dependence=False; single-feature=False). See metrics.",
+  "dependence": {
+    "depends_on_ftp_failed_logins": {
+      "shap_share": 0.03653896254799055,
+      "shap_rank": 5,
+      "ftp_recall_drop_when_removed": 0.0,
+      "verdict": false
+    },
+    "depends_on_successful_auth": {
+      "shap_share": 0.0015866742154476098,
+      "attacker_eventual_success_recall": 1.0,
+      "verdict": false
+    },
+    "depends_on_cic_artifacts": {
+      "shap_share": 0.4276146029324781,
+      "verdict": false
+    },
+    "depends_on_single_app_layer_feature": {
+      "max_share": 0.03653896254799055,
+      "feature": "ftp_failed_logins",
+      "verdict": false
+    },
+    "benign_that_fails_recall": 0.4706,
+    "attacker_eventual_success_recall": 1.0
+  },
+  "ablation": {
+    "with_behavioural_ftp_recall": 1.0,
+    "without_behavioural_30only_ftp_recall": 0.08571428571428572,
+    "behavioural_only_ftp_recall": 1.0,
+    "without_ftp_failed_logins_ftp_recall": 1.0,
+    "with_behavioural_benign_recall": 0.8524590163934426,
+    "without_behavioural_30only_benign_recall": 1.0,
+    "with_behavioural_fpr": 0.14754098360655737,
+    "without_ftp_failed_logins_fpr": 0.16393442622950818,
+    "ftp_recall_drop_without_failed_logins": 0.0
+  },
+  "caveats": [
+    "Single-container lab: real vsftpd + real veth/netns (non-loopback) but no separate OS/VM or physical host; one server implementation; cleartext + one FTPS config.",
+    "FTPS captures analysed separately: behavioural features genuinely unavailable (encrypted).",
+    "This corpus was used for evaluation ONLY -- never training/weighting/threshold/feature/HP selection.",
+    "No promotion, no threshold/heuristic change, no merge."
+  ],
+  "shap": {
+    "top12": [
+      {
+        "feature": "Dst Port",
+        "mean_abs_shap": 1.154109245740986,
+        "share": 0.17494949854792238
+      },
+      {
+        "feature": "Fwd Seg Size Min",
+        "mean_abs_shap": 1.0784426304074255,
+        "share": 0.16347932234209386
+      },
+      {
+        "feature": "Init Fwd Win Byts",
+        "mean_abs_shap": 0.5883419872486849,
+        "share": 0.0891857820424618
+      },
+      {
+        "feature": "Fwd IAT Min",
+        "mean_abs_shap": 0.2610344407053771,
+        "share": 0.039569776148723645
+      },
+      {
+        "feature": "ftp_failed_logins",
+        "mean_abs_shap": 0.24104072807541238,
+        "share": 0.03653896254799055
+      },
+      {
+        "feature": "Fwd Header Len",
+        "mean_abs_shap": 0.23208982618748583,
+        "share": 0.03518211023732477
+      },
+      {
+        "feature": "Flow IAT Mean",
+        "mean_abs_shap": 0.2246661005282279,
+        "share": 0.03405676002785595
+      },
+      {
+        "feature": "Flow IAT Min",
+        "mean_abs_shap": 0.19680230645588911,
+        "share": 0.029832933887837074
+      },
+      {
+        "feature": "Fwd Pkts/s",
+        "mean_abs_shap": 0.19586716502970025,
+        "share": 0.029691177356393563
+      },
+      {
+        "feature": "ftp_failed_login_ratio",
+        "mean_abs_shap": 0.19371682415424885,
+        "share": 0.029365210764187823
+      },
+      {
+        "feature": "Flow IAT Max",
+        "mean_abs_shap": 0.19273225433195423,
+        "share": 0.029215961464494997
+      },
+      {
+        "feature": "ftp_user_commands",
+        "mean_abs_shap": 0.17416712487558061,
+        "share": 0.02640170440793316
+      }
+    ],
+    "failed_logins_share": 0.03653896254799055,
+    "failed_logins_rank": 5,
+    "auth_share": 0.0015866742154476098,
+    "behavioural_share": 0.11607568985983864,
+    "cic_artifact_share": 0.4276146029324781,
+    "max_single_app_layer_share": 0.03653896254799055,
+    "max_single_app_layer_feature": "ftp_failed_logins",
+    "dominated_by_failed_logins": false
+  },
+  "ftps": [
+    {
+      "model": "production",
+      "n": 31,
+      "ftp_recall": 0.0,
+      "benign_recall": 1.0,
+      "predicted_ftp": 0,
+      "predicted_benign": 31
+    },
+    {
+      "model": "candidate2",
+      "n": 31,
+      "ftp_recall": 0.375,
+      "benign_recall": 1.0,
+      "predicted_ftp": 9,
+      "predicted_benign": 22
+    },
+    {
+      "model": "robust_behavioural",
+      "n": 31,
+      "ftp_recall": 0.0,
+      "benign_recall": 1.0,
+      "predicted_ftp": 0,
+      "predicted_benign": 31
+    },
+    {
+      "model": "ablation_30only",
+      "n": 31,
+      "ftp_recall": 0.041666666666666664,
+      "benign_recall": 1.0,
+      "predicted_ftp": 1,
+      "predicted_benign": 30
+    },
+    {
+      "model": "ablation_behavioural_only",
+      "n": 31,
+      "ftp_recall": 0.0,
+      "benign_recall": 1.0,
+      "predicted_ftp": 0,
+      "predicted_benign": 31
+    },
+    {
+      "model": "ablation_no_failed_logins",
+      "n": 31,
+      "ftp_recall": 0.0,
+      "benign_recall": 1.0,
+      "predicted_ftp": 0,
+      "predicted_benign": 31
+    }
+  ]
+}

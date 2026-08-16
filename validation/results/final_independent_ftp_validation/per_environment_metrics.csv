@@ -1,0 +1,2 @@
+environment,n_flows,accuracy,ftp_recall,benign_recall,benign_fp
+netns-veth-plaintext,131,0.9313,1.0,0.8525,9

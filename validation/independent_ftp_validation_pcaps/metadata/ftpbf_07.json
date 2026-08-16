@@ -1,0 +1,27 @@
+{
+  "capture_id": "ftpbf_07",
+  "scenario": "eventual_success_10",
+  "label": "FTP-BruteForce",
+  "client": "python-ftplib",
+  "server": "vsftpd(plaintext)",
+  "environment": "netns-veth-plaintext",
+  "interface": "veth-ivh",
+  "mode": "passive",
+  "scenario_family": "eventual_success",
+  "encrypted": false,
+  "attempts": 11,
+  "duration_s": 29.783,
+  "packet_count": 99,
+  "capture_timestamp": "2026-08-16T14:25:44.747062+00:00",
+  "source": "10.77.0.1",
+  "destination": "10.77.0.2:2121",
+  "capture_command": "tcpdump -i veth-ivh -w <pcap> -U -n 'host 10.77.0.2 and (tcp port 2121 or tcp port 2131 or tcp port 20 or tcp portrange 63000-63199)'",
+  "verification_status": "valid",
+  "detail": {
+    "attempts": 11,
+    "successes": 1,
+    "failures": 10,
+    "client": "python-ftplib",
+    "check_errors": []
+  }
+}
