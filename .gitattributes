@@ -7,3 +7,6 @@ validation/models/realistic_pcap_candidate_v2/*.pkl !filter !diff !merge
 
 # Targeted-benign candidate models: store as normal blobs (LFS push unavailable here)
 validation/models/targeted-benign-candidate/*.pkl !filter !diff !merge
+
+# Balanced real-PCAP candidate models: store as normal blobs (LFS push unavailable here)
+validation/models/balanced-real-candidate/*.pkl !filter !diff !merge

@@ -1,0 +1,4 @@
+model,cic_accuracy,cic_macro_f1,reproduces_baseline,v2_ftp_recall,v2_benign_recall
+production,0.9802990553521731,0.862697325722646,,,
+candidate2,0.9808875899011461,0.8649513122069374,,,
+cic_only_control,0.9804137697134137,0.8598570433880585,True,0.0,0.9562841530054644

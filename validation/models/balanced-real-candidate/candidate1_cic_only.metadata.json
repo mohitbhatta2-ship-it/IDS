@@ -1,0 +1,6 @@
+{
+  "candidate": "cic_only_control",
+  "seed": 42,
+  "reproduces_baseline": true,
+  "scaler": null
+}

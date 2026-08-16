@@ -2651,3 +2651,115 @@ class TargetedRetrainResultsTests(TestCase):
         model, _ = ml._load("histgradientboosting")
         acc = float((model.predict(test[ml.FEATURES]) == test["Label"]).mean())
         self.assertAlmostEqual(acc, 0.9803, places=4)
+
+
+# ---------------------------------------------------------------------------
+# Balanced real-PCAP retraining experiment (candidate only; frozen models)
+# ---------------------------------------------------------------------------
+
+from predictor import retraining_balanced as _rb
+
+_BRR_RESULTS = _P2(__file__).resolve().parents[2] / "validation" / "results" / "balanced_real_retraining"
+_HAS_BRR = (_BRR_RESULTS / "final_verdict.json").is_file()
+_BRR_READY = _SCAPY and _train_parquet() is not None \
+    and (_P2(__file__).resolve().parents[2] / "validation" / "realistic_pcaps_v2" / "MANIFEST.csv").is_file()
+
+
+@skipUnless(_BRR_READY, "scapy + parquet + corpora required")
+class BalancedRetrainModuleTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        live_capture._ensure_live_on_path()
+        cls.real = _rb.combined_real_flows()
+        X, y = _rb.rt.load_cic()
+        cls.cic_X, cls.cic_y = _rb.r2.stratified_cic_subsample(X, y, 2000)
+
+    def test_combined_real_is_larger_and_from_approved_sources_only(self):
+        df = self.real.df
+        self.assertEqual(len(self.real.invalid), 0)                    # no zero-fill
+        self.assertEqual(set(df["source"]), {"v1", "v2", "targeted"})  # no independent
+        self.assertGreater(len(df), 900)                              # substantially larger
+        self.assertEqual(set(df["Label"]), {"FTP-BruteForce", "Benign"})
+
+    def test_features_exactly_thirty_ordered_finite(self):
+        feat = [c for c in self.real.df.columns if c in ml.FEATURES]
+        self.assertEqual(feat, list(ml.FEATURES))
+        self.assertEqual(len(feat), 30)
+        self.assertTrue(_np.isfinite(self.real.df[ml.FEATURES].to_numpy()).all())
+
+    def test_balanced_weighting_equalises_real_class_mass(self):
+        fw, bw = _rb.class_weights(self.real.df, "balanced")
+        n_ftp = int((self.real.df["Label"] == "FTP-BruteForce").sum())
+        n_ben = int((self.real.df["Label"] == "Benign").sum())
+        self.assertAlmostEqual(fw * n_ftp, bw * n_ben, delta=1.0)
+
+    def test_assemble_uses_exactly_ml_features_and_per_class_weights(self):
+        fw, bw = _rb.class_weights(self.real.df, "balanced")
+        X, y, w, man = _rb.assemble(self.cic_X, self.cic_y, self.real.df, ftp_weight=fw, benign_weight=bw)
+        self.assertEqual(list(X.columns), list(ml.FEATURES))
+        self.assertAlmostEqual(man["real_ftp_total_weight"], man["real_benign_total_weight"], delta=2.0)
+
+    def test_loco_no_flow_overlap_between_train_and_test(self):
+        v2 = _rb.v2_captures(self.real)[:3]
+        loco = _rb.leave_one_capture_out(self.cic_X, self.cic_y, self.real, v2, 3.0, 5.0)
+        self.assertEqual(len(loco["folds"]), len(v2))    # assert inside raises on leak
+
+    def test_independent_pcaps_not_in_training_sources(self):
+        base = _P2(__file__).resolve().parents[2] / "validation"
+        indep = _pcap_sha_set(base / "independent_real_pcaps")
+        train = (_pcap_sha_set(base / "realistic_pcaps") | _pcap_sha_set(base / "realistic_pcaps_v2")
+                 | _pcap_sha_set(base / "targeted_benign_pcaps"))
+        self.assertTrue(indep.isdisjoint(train))
+
+    def test_candidate_dir_outside_production(self):
+        self.assertNotIn("webapp_data", str(_rb.candidate_dir()))
+        self.assertNotIn(str(ml.MODELS_DIR.resolve()), str(_rb.candidate_dir().resolve()))
+
+    def test_reproducibility_same_seed_same_predictions(self):
+        fw, bw = _rb.class_weights(self.real.df, "unweighted")
+        X, y, w, _ = _rb.assemble(self.cic_X, self.cic_y, self.real.df, ftp_weight=fw, benign_weight=bw)
+        m1 = _rb.train(X, y, w); m2 = _rb.train(X, y, w)
+        self.assertTrue((m1.predict(self.real.df[ml.FEATURES]) == m2.predict(self.real.df[ml.FEATURES])).all())
+
+
+@skipUnless(_HAS_BRR, "committed balanced_real_retraining results not present")
+class BalancedRetrainResultsTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.verdict = json.loads((_BRR_RESULTS / "final_verdict.json").read_text())
+        cls.hashes = json.loads((_BRR_RESULTS / "model_hashes_before_after.json").read_text())
+        cls.leak = json.loads((_BRR_RESULTS / "leakage_validation.json").read_text())
+
+    def test_frozen_artifacts_unchanged(self):
+        self.assertTrue(self.hashes["unchanged"])
+        self.assertEqual(self.hashes["before"], self.hashes["after"])
+
+    def test_selection_not_from_independent_test(self):
+        self.assertIn("v2 LOCO only", self.verdict["selection_basis"])
+
+    def test_verdict_has_all_criteria_and_promote_flag(self):
+        for k in ("ftp_recall_gt_0.70", "benign_recall_gt_0.90",
+                  "benign_fp_much_lower_than_cand2", "cic_non_regressed"):
+            self.assertIn(k, self.verdict["criteria"])
+        self.assertIn(self.verdict["promote"], (True, False))
+
+    def test_leakage_flags(self):
+        self.assertTrue(self.leak["independent_disjoint_from_training"])
+        self.assertTrue(self.leak["no_zero_fill"])
+        self.assertEqual(self.leak["n_features"], 30)
+
+    def test_required_evidence_files_exist(self):
+        for name in ("candidate_metrics.csv", "baseline_metrics.csv", "candidate_comparison.csv",
+                     "independent_test_metrics.csv", "per_capture_v2loco_metrics.csv",
+                     "confidence_distribution.csv", "bootstrap_ci_results.csv",
+                     "leakage_validation.json", "model_hashes_before_after.json",
+                     "final_verdict.json", "report.md"):
+            self.assertTrue((_BRR_RESULTS / name).is_file(), name)
+
+    def test_production_still_scores_known_number(self):
+        test = pd.read_parquet(ml.DATA_ROOT / "Processed_Data" / "test_selected.parquet")
+        model, _ = ml._load("histgradientboosting")
+        acc = float((model.predict(test[ml.FEATURES]) == test["Label"]).mean())
+        self.assertAlmostEqual(acc, 0.9803, places=4)

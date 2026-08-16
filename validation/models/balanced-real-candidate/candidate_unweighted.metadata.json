@@ -1,0 +1,25 @@
+{
+  "candidate": "cic_real_unweighted",
+  "seed": 42,
+  "ftp_weight": 1.0,
+  "benign_weight": 1.0,
+  "train_manifest": {
+    "cic_rows": 281295,
+    "real_rows": 1272,
+    "real_ftp_rows": 826,
+    "real_benign_rows": 446,
+    "ftp_weight": 1.0,
+    "benign_weight": 1.0,
+    "real_ftp_total_weight": 826.0,
+    "real_benign_total_weight": 446.0,
+    "excluded_captures": [],
+    "sources": [
+      "targeted",
+      "v1",
+      "v2"
+    ]
+  },
+  "cic_accuracy": 0.9803788566469491,
+  "cic_macro_f1": 0.8652970859710379,
+  "scaler": null
+}
