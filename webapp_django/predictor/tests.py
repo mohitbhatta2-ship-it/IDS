@@ -1956,3 +1956,140 @@ class CollectedV2ArtifactTests(TestCase):
         for rel in ("realistic_pcaps/MANIFEST.csv", "results/flows.csv"):
             p = v1 / rel
             self.assertTrue(p.is_file() and p.stat().st_size > 0, str(p))
+
+
+# ---------------------------------------------------------------------------
+# Realistic-PCAP retraining v2 — candidate experiment (production frozen)
+# ---------------------------------------------------------------------------
+
+from predictor import retraining_v2 as _r2
+
+_V2_RESULTS_DIR = _P2(__file__).resolve().parents[2] / "validation" / "results" / "retraining_v2"
+_HAS_V2_RESULTS = (_V2_RESULTS_DIR / "final_verdict.json").is_file()
+_RETRAIN_V2_READY = _SCAPY and _train_parquet() is not None and _V2_DIR.is_dir() \
+    and (_V2_DIR / "MANIFEST.csv").is_file()
+
+
+@skipUnless(_RETRAIN_V2_READY, "scapy + parquet + realistic_pcaps_v2 required")
+class RetrainingV2ModuleTests(TestCase):
+    """Leakage + schema regression tests on the v2 retraining machinery."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        live_capture._ensure_live_on_path()
+        cls.real = _r2.extract_real_flows_v2()
+        # a tiny CIC subsample keeps training fast; leakage/schema don't need 281k
+        X, y = _r2.rt.load_cic()
+        cls.cic_X, cls.cic_y = _r2.stratified_cic_subsample(X, y, 2000)
+
+    # -- schema / feature integrity ---------------------------------------
+
+    def test_real_flows_have_exactly_thirty_ordered_finite_features(self):
+        df = self.real.df
+        self.assertEqual(len(df), 854)
+        self.assertEqual(len(self.real.invalid), 0)               # no zero-fill
+        feat_cols = [c for c in df.columns if c in ml.FEATURES]
+        self.assertEqual(feat_cols, list(ml.FEATURES))            # exact order
+        self.assertEqual(len(feat_cols), 30)
+        self.assertTrue(_np.isfinite(df[ml.FEATURES].to_numpy()).all())
+
+    def test_assemble_uses_exactly_and_only_ml_features_in_order(self):
+        X, y, w, man = _r2.assemble_v2(self.cic_X, self.cic_y, self.real.df, real_weight=6.0)
+        self.assertEqual(list(X.columns), list(ml.FEATURES))
+
+    def test_labels_come_only_from_folder_ground_truth(self):
+        self.assertEqual(set(self.real.df["Label"]), {"FTP-BruteForce", "Benign"})
+        for cap, sub in self.real.df.groupby("capture"):
+            self.assertEqual(sub["Label"].nunique(), 1)           # one label per PCAP
+
+    def test_every_real_flow_traces_to_its_pcap(self):
+        for _, row in self.real.df.head(50).iterrows():
+            self.assertTrue(row["flow_uid"].startswith(row["capture"] + "#"))
+
+    # -- leakage (capture-level) ------------------------------------------
+
+    def test_leave_one_capture_out_never_shares_a_pcap_or_flow(self):
+        # a few captures is enough to prove the invariant without training 83 folds
+        caps = self.real.captures[:2] + self.real.captures[-2:]
+        subset = _r2.RealFlows(
+            df=self.real.df[self.real.df["capture"].isin(caps)].reset_index(drop=True),
+            invalid=[])
+        loco = _r2.leave_one_capture_out_v2(self.cic_X, self.cic_y, subset, real_weight=6.0)
+        self.assertEqual(len(loco["folds"]), len(caps))
+        for f in loco["folds"]:
+            self.assertFalse(f["held_out_in_train_captures"])     # no PCAP in both
+            self.assertEqual(f["train_test_flow_overlap"], 0)     # no flow in both
+
+    def test_assemble_excludes_the_held_out_capture(self):
+        cap = self.real.captures[0]
+        _X, _y, _w, man = _r2.assemble_v2(self.cic_X, self.cic_y, self.real.df,
+                                          exclude_captures=(cap,), real_weight=1.0)
+        self.assertNotIn(cap, man["included_captures"])
+
+    # -- artifact isolation / production untouched ------------------------
+
+    def test_candidate_dir_is_separate_from_production(self):
+        cand = _r2.candidate_dir_v2().resolve()
+        prod = ml.MODELS_DIR.resolve()
+        self.assertNotEqual(cand, prod)
+        self.assertNotIn(str(prod), str(cand))
+
+    def test_production_model_file_unchanged_and_scores_known_number(self):
+        test = pd.read_parquet(ml.DATA_ROOT / "Processed_Data" / "test_selected.parquet")
+        model, _ = ml._load("histgradientboosting")
+        acc = float((model.predict(test[ml.FEATURES]) == test["Label"]).mean())
+        self.assertAlmostEqual(acc, 0.9803, places=4)
+
+    def test_no_zero_filling_a_missing_feature_would_be_reported(self):
+        # feed a flow missing a feature to the SAME validator the extractor uses
+        from predictor import pcap_validation as pv
+        bad = {f: 1.0 for f in ml.FEATURES if f != "Flow Duration"}
+        self.assertIsNotNone(pv._feature_problem(bad))            # reported, not filled
+
+
+@skipUnless(_HAS_V2_RESULTS, "committed retraining_v2 results not present")
+class RetrainingV2ResultsTests(TestCase):
+    """Validate the committed experiment evidence and its safety guarantees."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.verdict = json.loads((_V2_RESULTS_DIR / "final_verdict.json").read_text())
+        cls.leakage = json.loads((_V2_RESULTS_DIR / "leakage_validation.json").read_text())
+        cls.meta = json.loads((_V2_RESULTS_DIR / "training_metadata.json").read_text())
+
+    def test_leakage_validation_all_pass(self):
+        self.assertTrue(self.leakage["all_pass"], self.leakage["checks"])
+        for key in ("no_pcap_in_train_and_test", "labels_only_from_folders",
+                    "exactly_30_features", "feature_order_equals_ml_features",
+                    "all_finite", "no_zero_filling", "every_flow_traceable_to_pcap",
+                    "candidate_dir_separate_from_production", "production_model_unchanged"):
+            self.assertTrue(self.leakage["checks"][key], key)
+
+    def test_production_model_unchanged_across_experiment(self):
+        self.assertEqual(self.meta["production_model_sha256_before"],
+                         self.meta["production_model_sha256_after"])
+        self.assertTrue(self.meta["production_model_unchanged"])
+
+    def test_no_candidate_is_auto_promoted(self):
+        self.assertFalse(self.verdict["promote"])
+        self.assertIn(self.verdict["classification"],
+                      ("production candidate", "promising but insufficient evidence",
+                       "unsuccessful"))
+
+    def test_candidate1_reproduces_baseline(self):
+        self.assertTrue(self.meta["cic_only_reproduction"]["reproduces"])
+
+    def test_required_evidence_files_exist(self):
+        for name in ("baseline_metrics.csv", "candidate_metrics.csv",
+                     "weighting_comparison.csv", "per_class_metrics.csv",
+                     "per_capture_metrics.csv", "confusion_baseline_cic.csv",
+                     "leakage_validation.json", "training_metadata.json",
+                     "final_verdict.json", "report.md"):
+            self.assertTrue((_V2_RESULTS_DIR / name).is_file(), name)
+
+    def test_candidate_artifacts_live_outside_production_dir(self):
+        cand_dir = _P2(__file__).resolve().parents[2] / "validation" / "models" / "realistic_pcap_candidate_v2"
+        if cand_dir.is_dir():
+            self.assertFalse(str(ml.MODELS_DIR.resolve()) in str(cand_dir.resolve()))

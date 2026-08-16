@@ -1,0 +1,14 @@
+{
+  "all_pass": true,
+  "checks": {
+    "no_pcap_in_train_and_test": true,
+    "labels_only_from_folders": true,
+    "exactly_30_features": true,
+    "feature_order_equals_ml_features": true,
+    "all_finite": true,
+    "no_zero_filling": true,
+    "every_flow_traceable_to_pcap": true,
+    "candidate_dir_separate_from_production": true,
+    "production_model_unchanged": true
+  }
+}

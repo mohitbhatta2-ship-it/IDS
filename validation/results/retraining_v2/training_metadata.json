@@ -1,0 +1,73 @@
+{
+  "experiment": "realistic_pcap_retraining_v2",
+  "created_utc": "2026-08-16T03:14:30.354197+00:00",
+  "seed": 42,
+  "model": "HistGradientBoostingClassifier",
+  "hyperparameters": {
+    "max_iter": 250,
+    "learning_rate": 0.1856048925770564,
+    "max_depth": 5,
+    "max_leaf_nodes": 38,
+    "l2_regularization": 0.9698823525505369
+  },
+  "features": [
+    "Init Fwd Win Byts",
+    "Fwd IAT Tot",
+    "Fwd IAT Max",
+    "Dst Port",
+    "Fwd IAT Mean",
+    "Fwd Header Len",
+    "Flow IAT Max",
+    "Flow Duration",
+    "Fwd Pkts/s",
+    "TotLen Fwd Pkts",
+    "Subflow Fwd Byts",
+    "Fwd Pkt Len Mean",
+    "Fwd Seg Size Avg",
+    "Fwd Pkt Len Max",
+    "Flow IAT Mean",
+    "Flow Pkts/s",
+    "Pkt Len Max",
+    "Pkt Len Mean",
+    "Fwd IAT Min",
+    "Bwd Pkt Len Mean",
+    "Pkt Size Avg",
+    "Bwd Seg Size Avg",
+    "Bwd Pkt Len Max",
+    "TotLen Bwd Pkts",
+    "Subflow Bwd Byts",
+    "Pkt Len Var",
+    "Pkt Len Std",
+    "Flow IAT Min",
+    "Fwd Seg Size Min",
+    "Fwd Pkt Len Std"
+  ],
+  "weightings": {
+    "none": 1.0,
+    "moderate": 6.0,
+    "strong": 24.0
+  },
+  "loco_cic_subsample": 30000,
+  "cic_only_reproduction": {
+    "cic_accuracy": 0.9804137697134137,
+    "cic_macro_f1": 0.8598570433880585,
+    "reproduces": true
+  },
+  "subsample_control_cic": {
+    "accuracy": 0.9815858512304362,
+    "macro_f1": 0.8100535779254568
+  },
+  "data_sources": {
+    "cic_train": "webapp_data/Processed_Data/balanced_train_selected.parquet",
+    "cic_test": "webapp_data/Processed_Data/test_selected.parquet",
+    "real_pcaps": "validation/realistic_pcaps_v2/"
+  },
+  "production_model_sha256_before": "8fb913333e519f1385df9f5b4ec7e008676e072ea039362328e81da7bab996d2",
+  "production_model_sha256_after": "8fb913333e519f1385df9f5b4ec7e008676e072ea039362328e81da7bab996d2",
+  "production_model_unchanged": true,
+  "candidate_dir": "/home/user/IDS/validation/models/realistic_pcap_candidate_v2",
+  "versions": {
+    "python": "3.11.15",
+    "sklearn": "1.9.0"
+  }
+}
