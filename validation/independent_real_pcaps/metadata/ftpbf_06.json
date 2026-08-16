@@ -1,0 +1,42 @@
+{
+  "capture_id": "ftpbf_06",
+  "scenario": "single_connection_pyftpdlib",
+  "label": "FTP-BruteForce",
+  "client": "python-ftplib",
+  "server": "permissive(pyftpdlib)",
+  "environment": "hostip (192.0.2.2)",
+  "interface": "lo",
+  "connection_pattern": "single_conn",
+  "attempts": 10,
+  "duration_s": 0.0025,
+  "packet_count": 51,
+  "capture_timestamp": "2026-08-16T04:40:37.087719+00:00",
+  "source": "192.0.2.2",
+  "destination": "192.0.2.2:2140",
+  "capture_command": "tcpdump -i lo -w <pcap> -U -n 'host 192.0.2.2 and (tcp port 2140 or tcp port 20 or tcp portrange 62280-62319)'",
+  "verification_status": "valid",
+  "detail": {
+    "attempts": 10,
+    "successes": 0,
+    "failures": 10,
+    "distinct_usernames": 1,
+    "pattern": "single_conn",
+    "reconnects": 0,
+    "mode": "passive",
+    "wall_duration_s": 0.803,
+    "check": {
+      "pcap": "ftpbf_06_permissive_single_connection_pyftpdlib.pcap",
+      "exists": true,
+      "readable": true,
+      "packets": 51,
+      "has_ftp_traffic": true,
+      "controlled_local_only": true,
+      "expected_host_present": true,
+      "tcp_only": true,
+      "port_ok": true,
+      "duration_s": 0.0024890899658203125,
+      "duration_valid": true
+    },
+    "check_errors": []
+  }
+}

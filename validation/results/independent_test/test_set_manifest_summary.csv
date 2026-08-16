@@ -1,0 +1,2 @@
+n_pcaps,benign,ftp_bruteforce,clients,servers,environments,distinct_scenarios,all_valid
+36,18,18,4,3,3,36,True

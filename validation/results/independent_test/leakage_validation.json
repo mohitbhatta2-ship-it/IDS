@@ -1,0 +1,18 @@
+{
+  "all_pass": true,
+  "checks": {
+    "independent_disjoint_from_v1": true,
+    "independent_disjoint_from_v2": true,
+    "no_duplicate_within_independent": true,
+    "labels_only_from_folders": true,
+    "exactly_30_features": true,
+    "feature_order_equals_ml_features": true,
+    "all_finite": true,
+    "no_zero_filling": true,
+    "every_flow_traceable_to_pcap": true,
+    "test_not_in_training_sources": true
+  },
+  "n_independent_pcaps": 36,
+  "n_v1": 16,
+  "n_v2": 83
+}

@@ -2093,3 +2093,206 @@ class RetrainingV2ResultsTests(TestCase):
         cand_dir = _P2(__file__).resolve().parents[2] / "validation" / "models" / "realistic_pcap_candidate_v2"
         if cand_dir.is_dir():
             self.assertFalse(str(ml.MODELS_DIR.resolve()) in str(cand_dir.resolve()))
+
+
+# ---------------------------------------------------------------------------
+# Independent real-PCAP TEST corpus + final evaluation (frozen models)
+# ---------------------------------------------------------------------------
+
+from predictor import independent_capture as _ic, independent_eval as _ie, custom_ftp_server as _cfs
+
+_INDEP_DIR = _P2(__file__).resolve().parents[2] / "validation" / "independent_real_pcaps"
+_HAS_INDEP = (_INDEP_DIR / "MANIFEST.csv").is_file()
+_INDEP_RESULTS = _P2(__file__).resolve().parents[2] / "validation" / "results" / "independent_test"
+_HAS_INDEP_RESULTS = (_INDEP_RESULTS / "final_verdict.json").is_file()
+
+
+def _pcap_sha_set(root):
+    return {_hashlib.sha256(p.read_bytes()).hexdigest() for p in _P2(root).rglob("*.pcap")}
+
+
+class IndependentCaptureFrameworkTests(TestCase):
+    """Framework invariants for the independent corpus (no live capture)."""
+
+    def test_custom_ftp_server_module_is_a_real_second_implementation(self):
+        # a genuinely different server class, not pyftpdlib
+        self.assertTrue(hasattr(_cfs, "CustomFTPServer"))
+        self.assertNotIn("pyftpdlib", _cfs.__file__)
+
+    def test_all_targets_are_controlled_local(self):
+        targets = _ic.build_targets(Path("/tmp/nonexistent"))
+        for t in targets.values():
+            self.assertTrue(t.is_controlled_local())
+
+    def test_external_address_is_rejected(self):
+        self.assertFalse(_ic.is_controlled_local("8.8.8.8"))
+        self.assertFalse(_ic.is_controlled_local("93.184.216.34"))
+
+    def test_bpf_confines_to_host_and_ports(self):
+        t = _ic.IndepTarget("127.0.0.5", 2130, 62000, 62039, "lo", "custom", "lo5")
+        bpf = t.bpf()
+        self.assertIn("host 127.0.0.5", bpf)
+        self.assertIn("tcp port 2130", bpf)
+
+    def test_spec_counts_in_target_range(self):
+        b, f = _ic.benign_specs(), _ic.bruteforce_specs()
+        self.assertTrue(15 <= len(b) <= 20, len(b))
+        self.assertTrue(15 <= len(f) <= 20, len(f))
+
+    def test_bruteforce_pool_excludes_real_password(self):
+        self.assertNotIn(_ic.PASSWORD, _ic.WRONG_PW)
+
+
+@skipUnless(_CAN_CAPTURE, "needs root + tcpdump + scapy for a live capture")
+class IndependentCaptureLiveTests(TestCase):
+    """Prove the custom-server captures are real, controlled-local, independent."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.tmp = Path(tempfile.mkdtemp())
+        cls.target = _ic.IndepTarget("127.0.0.5", 2137, 63000, 63039, "lo", "custom", "lo5")
+        cls.pool = _ic.ServerPool({("lo5", "custom"): cls.target}, cls.tmp / "home")
+        cls.pool.get("lo5", "custom")
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.pool.stop_all()
+        _shutil.rmtree(cls.tmp, ignore_errors=True)
+        super().tearDownClass()
+
+    def _cap(self, name, fn):
+        pcap = self.tmp / f"{name}.pcap"
+        cap = _ic.Tcpdump(pcap_path=pcap, target=self.target).start()
+        try:
+            stats = fn(self.target)
+        finally:
+            cap.stop()
+        return pcap, stats
+
+    def test_custom_server_benign_capture_is_real_and_controlled(self):
+        pcap, _ = self._cap("b", _ic.b_upload_then_download)
+        chk = _ic.verify_pcap(pcap, self.target)
+        self.assertTrue(chk.ok, chk.errors)
+        self.assertTrue(chk.controlled_local_only and chk.expected_host_present)
+
+    def test_custom_server_bruteforce_only_fails(self):
+        pcap, stats = self._cap("bf", lambda t: _ic.bf_newconn(t, [("admin", pw) for pw in _ic.WRONG_PW[:4]]))
+        chk = _ic.verify_pcap(pcap, self.target)
+        self.assertTrue(chk.ok, chk.errors)
+        self.assertEqual(stats["successes"], 0)
+        self.assertEqual(stats["failures"], 4)
+
+    def test_two_captures_are_independent(self):
+        p1, _ = self._cap("i1", _ic.b_nlst_listing)
+        p2, _ = self._cap("i2", _ic.b_nlst_listing)
+        self.assertNotEqual(p1.read_bytes(), p2.read_bytes())
+
+    def test_bruteforce_refuses_external_destination(self):
+        ext = _ic.IndepTarget("93.184.216.34", 2137, 63000, 63039, "lo", "custom", "x")
+        with self.assertRaises(AssertionError):
+            _ic.bf_newconn(ext, [("admin", "x")])
+
+
+@skipUnless(_HAS_INDEP, "independent corpus not present")
+class IndependentTestArtifactLeakageTests(TestCase):
+    """Automated leakage/independence proofs on the committed independent corpus."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        with (_INDEP_DIR / "MANIFEST.csv").open() as f:
+            cls.rows = list(csv.DictReader(f))
+        cls.root = _P2(__file__).resolve().parents[2] / "validation"
+
+    def test_independent_pcaps_disjoint_from_v1(self):
+        indep = _pcap_sha_set(_INDEP_DIR)
+        v1 = _pcap_sha_set(self.root / "realistic_pcaps")
+        self.assertTrue(indep.isdisjoint(v1))
+
+    def test_independent_pcaps_disjoint_from_v2(self):
+        indep = _pcap_sha_set(_INDEP_DIR)
+        v2 = _pcap_sha_set(self.root / "realistic_pcaps_v2")
+        self.assertTrue(indep.isdisjoint(v2))
+
+    def test_no_duplicate_pcaps(self):
+        hashes = {}
+        for p in _INDEP_DIR.rglob("*.pcap"):
+            h = _hashlib.sha256(p.read_bytes()).hexdigest()
+            self.assertNotIn(h, hashes, f"{p.name} duplicates {hashes.get(h)}")
+            hashes[h] = p.name
+
+    def test_labels_come_only_from_folders(self):
+        for r in self.rows:
+            folder = "benign" if r["label"] == "Benign" else "ftp_bruteforce"
+            matches = list((_INDEP_DIR / folder).glob(f"{r['capture_id']}_*.pcap"))
+            self.assertTrue(matches, r["capture_id"])
+            self.assertIn(r["label"], ("Benign", "FTP-BruteForce"))
+
+    def test_all_destinations_are_controlled_local(self):
+        for r in self.rows:
+            addr = r["destination"].rsplit(":", 1)[0]
+            self.assertTrue(_ic.is_controlled_local(addr), r["destination"])
+
+    def test_all_captures_verified_valid(self):
+        for r in self.rows:
+            self.assertEqual(r["verification_status"], "valid", r["capture_id"])
+
+    @skipUnless(_SCAPY and _train_parquet() is not None, "scapy + parquet required")
+    def test_extraction_is_exactly_thirty_ordered_finite_no_zero_fill(self):
+        flows = _ie.extract_test_flows()
+        self.assertGreater(len(flows.df), 0)
+        self.assertEqual(len(flows.invalid), 0)                       # no zero-fill
+        feat = [c for c in flows.df.columns if c in ml.FEATURES]
+        self.assertEqual(feat, list(ml.FEATURES))                    # order
+        self.assertEqual(len(feat), 30)
+        self.assertTrue(_np.isfinite(flows.df[ml.FEATURES].to_numpy()).all())
+        for _, row in flows.df.head(30).iterrows():
+            self.assertTrue(row["flow_uid"].startswith(row["capture"] + "#"))  # traceable
+
+
+@skipUnless(_HAS_INDEP_RESULTS, "committed independent-test results not present")
+class IndependentTestResultsTests(TestCase):
+    """Validate the committed independent-evaluation evidence and frozen-model safety."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.verdict = json.loads((_INDEP_RESULTS / "final_verdict.json").read_text())
+        cls.leakage = json.loads((_INDEP_RESULTS / "leakage_validation.json").read_text())
+        cls.hashes = json.loads((_INDEP_RESULTS / "model_hashes_before_after.json").read_text())
+
+    def test_leakage_all_pass(self):
+        self.assertTrue(self.leakage["all_pass"], self.leakage["checks"])
+        for k in ("independent_disjoint_from_v1", "independent_disjoint_from_v2",
+                  "no_duplicate_within_independent", "labels_only_from_folders",
+                  "exactly_30_features", "feature_order_equals_ml_features", "all_finite",
+                  "no_zero_filling", "every_flow_traceable_to_pcap"):
+            self.assertTrue(self.leakage["checks"][k], k)
+
+    def test_frozen_models_unchanged_before_after(self):
+        self.assertTrue(self.hashes["unchanged"])
+        self.assertEqual(self.hashes["before"], self.hashes["after"])
+
+    def test_candidate_not_promoted(self):
+        self.assertFalse(self.verdict["promote"])
+        self.assertIn(self.verdict["classification"],
+                      ("PROMISING AND SUPPORTED BY INDEPENDENT TEST",
+                       "PROMISING BUT INSUFFICIENT EVIDENCE",
+                       "NOT SUPPORTED BY INDEPENDENT TEST"))
+
+    def test_required_evidence_files_exist(self):
+        for name in ("baseline_metrics.csv", "candidate_metrics.csv",
+                     "confusion_matrix_production.csv", "confusion_matrix_candidate.csv",
+                     "per_class_metrics.csv", "per_capture_metrics.csv",
+                     "prediction_distribution.csv", "confidence_distribution.csv",
+                     "bootstrap_or_ci_results.csv", "three_way_comparison.csv",
+                     "test_set_manifest_summary.csv", "leakage_validation.json",
+                     "model_hashes_before_after.json", "final_verdict.json", "report.md"):
+            self.assertTrue((_INDEP_RESULTS / name).is_file(), name)
+
+    def test_production_model_still_scores_known_number(self):
+        test = pd.read_parquet(ml.DATA_ROOT / "Processed_Data" / "test_selected.parquet")
+        model, _ = ml._load("histgradientboosting")
+        acc = float((model.predict(test[ml.FEATURES]) == test["Label"]).mean())
+        self.assertAlmostEqual(acc, 0.9803, places=4)

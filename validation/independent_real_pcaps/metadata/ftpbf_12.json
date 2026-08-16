@@ -1,0 +1,41 @@
+{
+  "capture_id": "ftpbf_12",
+  "scenario": "valid_user_wrong_password",
+  "label": "FTP-BruteForce",
+  "client": "python-ftplib",
+  "server": "permissive(pyftpdlib)",
+  "environment": "hostip (192.0.2.2)",
+  "interface": "lo",
+  "connection_pattern": "new_conn",
+  "attempts": 16,
+  "duration_s": 0.0082,
+  "packet_count": 240,
+  "capture_timestamp": "2026-08-16T04:40:47.547405+00:00",
+  "source": "192.0.2.2",
+  "destination": "192.0.2.2:2140",
+  "capture_command": "tcpdump -i lo -w <pcap> -U -n 'host 192.0.2.2 and (tcp port 2140 or tcp port 20 or tcp portrange 62280-62319)'",
+  "verification_status": "valid",
+  "detail": {
+    "attempts": 16,
+    "successes": 0,
+    "failures": 16,
+    "distinct_usernames": 1,
+    "pattern": "new_conn",
+    "mode": "passive",
+    "wall_duration_s": 0.809,
+    "check": {
+      "pcap": "ftpbf_12_permissive_valid_user_wrong_password.pcap",
+      "exists": true,
+      "readable": true,
+      "packets": 240,
+      "has_ftp_traffic": true,
+      "controlled_local_only": true,
+      "expected_host_present": true,
+      "tcp_only": true,
+      "port_ok": true,
+      "duration_s": 0.008217096328735352,
+      "duration_valid": true
+    },
+    "check_errors": []
+  }
+}

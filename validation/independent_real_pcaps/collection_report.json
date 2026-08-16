@@ -1,0 +1,67 @@
+{
+  "experiment": "independent_real_pcap_test_corpus",
+  "created_utc": "2026-08-16T04:41:09.565380+00:00",
+  "purpose": "TEST ONLY -- final independent evaluation of frozen Candidate 2.",
+  "never_used_for": [
+    "training",
+    "retraining",
+    "fine-tuning",
+    "sample weighting",
+    "threshold selection",
+    "hyperparameter selection",
+    "feature selection",
+    "candidate selection",
+    "SHAP tuning"
+  ],
+  "labels_from": "scenario folder (never model predictions)",
+  "controlled_local_only": true,
+  "pcap_count": 36,
+  "benign_count": 18,
+  "ftp_bruteforce_count": 18,
+  "captures_passing_verification": 36,
+  "total_flows": 420,
+  "total_incomplete_flows": 0,
+  "n_model_features": 30,
+  "diversity": {
+    "by_client": {
+      "python-ftplib": 28,
+      "curl": 4,
+      "wget": 2,
+      "raw-socket": 2
+    },
+    "by_server": {
+      "custom(custom-raw-socket)": 22,
+      "permissive(pyftpdlib)": 11,
+      "ratelimited(pyftpdlib)": 3
+    },
+    "by_environment": {
+      "lo5 (127.0.0.5)": 12,
+      "lo6 (127.0.0.6)": 12,
+      "hostip (192.0.2.2)": 12
+    },
+    "by_connection_pattern": {
+      "single": 16,
+      "repeated": 1,
+      "reconnect": 1,
+      "new_conn": 12,
+      "single_conn": 4,
+      "multi_burst": 2
+    },
+    "distinct_scenarios": 36
+  },
+  "new_vs_v2": [
+    "custom raw-socket FTP server (different implementation)",
+    "FTP commands not in v2 (MKD/RMD, RNFR/RNTO, DELE, APPE, SIZE, MDTM, NLST, STAT)",
+    "new loopback addresses (127.0.0.5/.6) + host-local address",
+    "new control ports (2130/2140/2150)"
+  ],
+  "limitations": [
+    "Single-host container: same-host traffic always traverses lo, so no genuinely separate physical interface is exercised (address varies, not iface).",
+    "Two server implementations (custom raw-socket + pyftpdlib); no third-party daemon.",
+    "No FTPS/TLS (pyOpenSSL unavailable).",
+    "Loopback lab; not real multi-host network traffic."
+  ],
+  "versions": {
+    "python": "3.11.15"
+  }
+}

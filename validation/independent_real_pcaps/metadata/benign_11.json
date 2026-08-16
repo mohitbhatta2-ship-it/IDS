@@ -1,0 +1,39 @@
+{
+  "capture_id": "benign_11",
+  "scenario": "repeated_sessions",
+  "label": "Benign",
+  "client": "python-ftplib",
+  "server": "permissive(pyftpdlib)",
+  "environment": "lo6 (127.0.0.6)",
+  "interface": "lo",
+  "connection_pattern": "repeated",
+  "attempts": 3,
+  "duration_s": 0.0061,
+  "packet_count": 94,
+  "capture_timestamp": "2026-08-16T04:39:50.333932+00:00",
+  "source": "127.0.0.6",
+  "destination": "127.0.0.6:2140",
+  "capture_command": "tcpdump -i lo -w <pcap> -U -n 'host 127.0.0.6 and (tcp port 2140 or tcp port 20 or tcp portrange 62160-62199)'",
+  "verification_status": "valid",
+  "detail": {
+    "attempts": 3,
+    "successes": 3,
+    "sessions": 3,
+    "mode": "passive",
+    "wall_duration_s": 0.806,
+    "check": {
+      "pcap": "benign_11_permissive_repeated_sessions.pcap",
+      "exists": true,
+      "readable": true,
+      "packets": 94,
+      "has_ftp_traffic": true,
+      "controlled_local_only": true,
+      "expected_host_present": true,
+      "tcp_only": true,
+      "port_ok": true,
+      "duration_s": 0.0060901641845703125,
+      "duration_valid": true
+    },
+    "check_errors": []
+  }
+}
