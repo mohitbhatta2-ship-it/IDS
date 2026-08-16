@@ -1,0 +1,43 @@
+{
+  "capture_id": "benign_38",
+  "scenario": "size_mdtm_custom",
+  "label": "Benign",
+  "client": "python-ftplib",
+  "server": "custom(custom-raw-socket)",
+  "environment": "te9 (127.0.0.9)",
+  "interface": "lo",
+  "mode": "passive",
+  "connection_pattern": "single",
+  "attempts": 1,
+  "duration_s": 0.0013,
+  "packet_count": 21,
+  "capture_timestamp": "2026-08-16T07:00:11.144578+00:00",
+  "source": "127.0.0.9",
+  "destination": "127.0.0.9:2230",
+  "capture_command": "tcpdump -i lo -w <pcap> -U -n 'host 127.0.0.9 and (tcp port 2230 or tcp port 20 or tcp portrange 63620-63659)'",
+  "verification_status": "valid",
+  "detail": {
+    "attempts": 1,
+    "successes": 1,
+    "commands": [
+      "SIZE",
+      "MDTM",
+      "STAT"
+    ],
+    "wall_duration_s": 0.802,
+    "check": {
+      "pcap": "benign_38_custom_size_mdtm_custom.pcap",
+      "exists": true,
+      "readable": true,
+      "packets": 21,
+      "has_ftp_traffic": true,
+      "controlled_local_only": true,
+      "expected_host_present": true,
+      "tcp_only": true,
+      "port_ok": true,
+      "duration_s": 0.0013370513916015625,
+      "duration_valid": true
+    },
+    "check_errors": []
+  }
+}

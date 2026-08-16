@@ -1,0 +1,48 @@
+{
+  "capture_id": "benign_08",
+  "scenario": "active_command_workout",
+  "label": "Benign",
+  "client": "python-ftplib",
+  "server": "permissive(pyftpdlib)",
+  "environment": "hostip2 (192.0.2.2)",
+  "interface": "lo",
+  "mode": "active",
+  "connection_pattern": "single",
+  "attempts": 1,
+  "duration_s": 0.0052,
+  "packet_count": 64,
+  "capture_timestamp": "2026-08-16T06:59:18.549420+00:00",
+  "source": "192.0.2.2",
+  "destination": "192.0.2.2:2240",
+  "capture_command": "tcpdump -i lo -w <pcap> -U -n 'host 192.0.2.2 and (tcp port 2240 or tcp port 20 or tcp portrange 63900-63939)'",
+  "verification_status": "valid",
+  "detail": {
+    "attempts": 1,
+    "successes": 1,
+    "bytes_down": 320,
+    "commands": [
+      "MKD",
+      "STOR",
+      "SIZE",
+      "RETR",
+      "DELE",
+      "RMD",
+      "LIST"
+    ],
+    "wall_duration_s": 0.806,
+    "check": {
+      "pcap": "benign_08_permissive_active_command_workout.pcap",
+      "exists": true,
+      "readable": true,
+      "packets": 64,
+      "has_ftp_traffic": true,
+      "controlled_local_only": true,
+      "expected_host_present": true,
+      "tcp_only": true,
+      "port_ok": true,
+      "duration_s": 0.005249977111816406,
+      "duration_valid": true
+    },
+    "check_errors": []
+  }
+}

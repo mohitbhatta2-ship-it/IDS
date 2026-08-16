@@ -1,0 +1,44 @@
+{
+  "capture_id": "benign_23",
+  "scenario": "mixed_transfer",
+  "label": "Benign",
+  "client": "python-ftplib",
+  "server": "custom(custom-raw-socket)",
+  "environment": "te10 (127.0.0.10)",
+  "interface": "lo",
+  "mode": "passive",
+  "connection_pattern": "single",
+  "attempts": 1,
+  "duration_s": 0.1756,
+  "packet_count": 83,
+  "capture_timestamp": "2026-08-16T06:59:44.943773+00:00",
+  "source": "127.0.0.10",
+  "destination": "127.0.0.10:2230",
+  "capture_command": "tcpdump -i lo -w <pcap> -U -n 'host 127.0.0.10 and (tcp port 2230 or tcp port 20 or tcp portrange 63740-63779)'",
+  "verification_status": "valid",
+  "detail": {
+    "attempts": 1,
+    "successes": 1,
+    "bytes_down": 2315,
+    "commands": [
+      "RETR",
+      "STOR",
+      "APPE"
+    ],
+    "wall_duration_s": 0.976,
+    "check": {
+      "pcap": "benign_23_custom_mixed_transfer.pcap",
+      "exists": true,
+      "readable": true,
+      "packets": 83,
+      "has_ftp_traffic": true,
+      "controlled_local_only": true,
+      "expected_host_present": true,
+      "tcp_only": true,
+      "port_ok": true,
+      "duration_s": 0.17557787895202637,
+      "duration_valid": true
+    },
+    "check_errors": []
+  }
+}

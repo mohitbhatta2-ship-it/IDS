@@ -2410,3 +2410,148 @@ class FinalRobustnessResultsTests(TestCase):
                      "confidence_error_groups.csv", "capture_metrics.csv",
                      "data_requirements.json", "final_robustness_verdict.json", "report.md"):
             self.assertTrue((_ROBUST_RESULTS / name).is_file(), name)
+
+
+# ---------------------------------------------------------------------------
+# Targeted benign real-PCAP corpus (frozen models; collection + validation)
+# ---------------------------------------------------------------------------
+
+from predictor import targeted_capture as _tc
+
+_TGT_DIR = _P2(__file__).resolve().parents[2] / "validation" / "targeted_benign_pcaps"
+_HAS_TGT = (_TGT_DIR / "MANIFEST.csv").is_file()
+
+
+class TargetedBenignFrameworkTests(TestCase):
+    """Framework invariants (no live capture)."""
+
+    def test_all_targets_are_controlled_local(self):
+        for t in _tc.build_targets(Path("/tmp/nonexistent")).values():
+            self.assertTrue(t.is_controlled_local())
+
+    def test_ports_are_disjoint_from_independent_set(self):
+        # independent used 2130/2140/2150; targeted uses 2230/2240/2250
+        self.assertEqual(set(_tc.SERVER_PORT.values()), {2230, 2240, 2250})
+
+    def test_spec_count_meets_target_and_covers_fp_categories(self):
+        specs = _tc.benign_specs()
+        self.assertGreaterEqual(len(specs), 30)
+        self.assertTrue(all(s.scenario for s in specs))
+        modes = {s.mode for s in specs}
+        self.assertIn("active", modes)         # active-mode benign is targeted
+        self.assertGreaterEqual(len({s.server for s in specs}), 3)  # 3 server configs
+
+    def test_scenarios_span_command_transfer_reconnect(self):
+        names = " ".join(s.scenario for s in _tc.benign_specs())
+        for kw in ("command", "mkd", "append", "upload", "download", "reconnect", "multi_session"):
+            self.assertIn(kw, names.lower())
+
+
+@skipUnless(_CAN_CAPTURE, "needs root + tcpdump + scapy for a live capture")
+class TargetedBenignLiveTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.tmp = Path(tempfile.mkdtemp())
+        cls.target = _tc.TargetedTarget("127.0.0.8", 2239, 63900, 63939, "lo", "custom", "te8")
+        cls.pool = _tc.ServerPool({("te8", "custom"): cls.target}, cls.tmp / "home")
+        cls.pool.get("te8", "custom")
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.pool.stop_all()
+        _shutil.rmtree(cls.tmp, ignore_errors=True)
+        super().tearDownClass()
+
+    def _cap(self, name, fn, passive=True):
+        pcap = self.tmp / f"{name}.pcap"
+        cap = _tc.Tcpdump(pcap_path=pcap, target=self.target).start()
+        try:
+            fn(self.target, passive=passive)
+        finally:
+            cap.stop()
+        return pcap
+
+    def test_active_mode_benign_capture_is_real_and_controlled(self):
+        pcap = self._cap("active", _tc.ic.b_active_download, passive=False)
+        chk = _tc.verify_pcap(pcap, self.target)
+        self.assertTrue(chk.ok, chk.errors)
+        self.assertTrue(chk.controlled_local_only)
+
+    def test_download_delete_works_without_550(self):
+        pcap = self._cap("dd", _tc.b_download_delete)
+        chk = _tc.verify_pcap(pcap, self.target)
+        self.assertTrue(chk.ok, chk.errors)
+
+    def test_two_captures_are_independent(self):
+        p1 = self._cap("i1", _tc.b_command_workout)
+        p2 = self._cap("i2", _tc.b_command_workout)
+        self.assertNotEqual(p1.read_bytes(), p2.read_bytes())
+
+
+@skipUnless(_HAS_TGT, "targeted benign corpus not present")
+class TargetedBenignArtifactTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        with (_TGT_DIR / "MANIFEST.csv").open() as f:
+            cls.rows = list(csv.DictReader(f))
+        cls.base = _P2(__file__).resolve().parents[2] / "validation"
+
+    def test_manifest_columns(self):
+        self.assertTrue(self.rows)
+        self.assertEqual(set(self.rows[0].keys()), set(_tc.MANIFEST_COLUMNS))
+
+    def test_count_meets_target(self):
+        self.assertGreaterEqual(len(self.rows), 30)
+
+    def test_all_labels_are_benign_from_folder(self):
+        for r in self.rows:
+            self.assertEqual(r["label"], "Benign")
+            self.assertTrue(list((_TGT_DIR / "benign").glob(f"{r['capture_id']}_*.pcap")))
+
+    def test_every_pcap_exists_and_no_duplicates(self):
+        hashes = {}
+        for r in self.rows:
+            p = next((_TGT_DIR / "benign").glob(f"{r['capture_id']}_*.pcap"))
+            h = _hashlib.sha256(p.read_bytes()).hexdigest()
+            self.assertNotIn(h, hashes)
+            hashes[h] = p.name
+
+    def test_disjoint_from_v1_v2_independent(self):
+        new = _pcap_sha_set(_TGT_DIR)
+        for other in ("realistic_pcaps", "realistic_pcaps_v2", "independent_real_pcaps"):
+            self.assertTrue(new.isdisjoint(_pcap_sha_set(self.base / other)), other)
+
+    def test_all_destinations_controlled_local(self):
+        for r in self.rows:
+            addr = r["destination"].rsplit(":", 1)[0]
+            self.assertTrue(_tc.is_controlled_local(addr), r["destination"])
+
+    def test_all_verified_valid(self):
+        for r in self.rows:
+            self.assertEqual(r["verification_status"], "valid", r["capture_id"])
+
+    def test_leakage_validation_all_pass(self):
+        lk = json.loads((_TGT_DIR / "leakage_validation.json").read_text())
+        self.assertTrue(lk["all_pass"], lk["checks"])
+
+    @skipUnless(_SCAPY and _train_parquet() is not None, "scapy + parquet required")
+    def test_sample_extraction_exactly_thirty_finite_ordered(self):
+        from predictor import pcap_validation as pv
+        live_capture._ensure_live_on_path()
+        sample = [r for r in self.rows if r["capture_id"] in ("benign_01", "benign_20", "benign_41")]
+        self.assertTrue(sample)
+        for r in sample:
+            pcap = next((_TGT_DIR / "benign").glob(f"{r['capture_id']}_*.pcap"))
+            flows = pv.replay_pcap(pcap)
+            self.assertGreater(len(flows), 0)
+            for fl in flows:
+                self.assertIsNone(pv._feature_problem(fl["features"]))
+                self.assertEqual([f for f in fl["features"] if f in ml.FEATURES], list(ml.FEATURES))
+
+    def test_production_and_candidate_untouched(self):
+        test = pd.read_parquet(ml.DATA_ROOT / "Processed_Data" / "test_selected.parquet")
+        model, _ = ml._load("histgradientboosting")
+        acc = float((model.predict(test[ml.FEATURES]) == test["Label"]).mean())
+        self.assertAlmostEqual(acc, 0.9803, places=4)

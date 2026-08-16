@@ -1,0 +1,40 @@
+{
+  "capture_id": "benign_03",
+  "scenario": "active_download_throttled",
+  "label": "Benign",
+  "client": "python-ftplib",
+  "server": "throttled(pyftpdlib)",
+  "environment": "te10 (127.0.0.10)",
+  "interface": "lo",
+  "mode": "active",
+  "connection_pattern": "single",
+  "attempts": 1,
+  "duration_s": 0.0022,
+  "packet_count": 23,
+  "capture_timestamp": "2026-08-16T06:59:09.531276+00:00",
+  "source": "127.0.0.10",
+  "destination": "127.0.0.10:2250",
+  "capture_command": "tcpdump -i lo -w <pcap> -U -n 'host 127.0.0.10 and (tcp port 2250 or tcp port 20 or tcp portrange 63820-63859)'",
+  "verification_status": "valid",
+  "detail": {
+    "attempts": 1,
+    "successes": 1,
+    "bytes_down": 2150,
+    "mode": "active",
+    "wall_duration_s": 0.803,
+    "check": {
+      "pcap": "benign_03_throttled_active_download_throttled.pcap",
+      "exists": true,
+      "readable": true,
+      "packets": 23,
+      "has_ftp_traffic": true,
+      "controlled_local_only": true,
+      "expected_host_present": true,
+      "tcp_only": true,
+      "port_ok": true,
+      "duration_s": 0.002177000045776367,
+      "duration_valid": true
+    },
+    "check_errors": []
+  }
+}

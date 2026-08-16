@@ -1,0 +1,72 @@
+{
+  "experiment": "targeted_benign_pcap_collection",
+  "created_utc": "2026-08-16T07:00:21.276363+00:00",
+  "purpose": "Targeted benign corpus for the structured benign FPs in final_robustness.",
+  "retrained": false,
+  "labels_from": "scenario folder (never predictions)",
+  "controlled_local_only": true,
+  "pcap_count": 41,
+  "benign_count": 41,
+  "captures_passing_verification": 41,
+  "total_flows": 215,
+  "total_incomplete_flows": 0,
+  "n_model_features": 30,
+  "diversity": {
+    "by_scenario": 41,
+    "by_client": {
+      "python-ftplib": 35,
+      "curl": 3,
+      "wget": 3
+    },
+    "by_server": {
+      "custom(custom-raw-socket)": 18,
+      "permissive(pyftpdlib)": 13,
+      "throttled(pyftpdlib)": 10
+    },
+    "by_environment": {
+      "te8 (127.0.0.8)": 11,
+      "te9 (127.0.0.9)": 10,
+      "te10 (127.0.0.10)": 10,
+      "hostip2 (192.0.2.2)": 10
+    },
+    "by_mode": {
+      "active": 10,
+      "passive": 31
+    },
+    "by_connection_pattern": {
+      "single": 35,
+      "reconnect": 2,
+      "repeated": 4
+    }
+  },
+  "leakage": {
+    "all_pass": true,
+    "checks": {
+      "disjoint_from_v1": true,
+      "disjoint_from_v2": true,
+      "disjoint_from_independent": true,
+      "no_duplicate_within_corpus": true,
+      "labels_only_from_folders": true,
+      "all_verified_valid": true
+    },
+    "n_new": 41,
+    "n_v1": 16,
+    "n_v2": 83,
+    "n_independent": 36
+  },
+  "targets_the_fp_categories": [
+    "active-mode benign",
+    "command-heavy sessions",
+    "upload/download/append/delete/mixed transfers",
+    "reconnect / multi-session"
+  ],
+  "limitations": [
+    "Loopback / host-local lab only (single host; same-host traffic stays on lo).",
+    "Two server implementations (custom raw-socket + pyftpdlib configs); no third-party daemon; no FTPS/TLS.",
+    "Benign-only corpus by design (targets the benign FP problem).",
+    "For FUTURE evaluation/retraining decisions only after a fresh independent test; not used to tune anything here."
+  ],
+  "versions": {
+    "python": "3.11.15"
+  }
+}
