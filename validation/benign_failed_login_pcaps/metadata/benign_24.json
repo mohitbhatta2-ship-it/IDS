@@ -1,0 +1,26 @@
+{
+  "capture_id": "benign_24",
+  "scenario": "reconnect_success_2b",
+  "label": "Benign",
+  "client": "python-ftplib",
+  "server": "permissive(pyftpdlib)",
+  "environment": "bfhost (192.0.2.2)",
+  "interface": "lo",
+  "mode": "passive",
+  "scenario_family": "reconnect",
+  "attempts": 3,
+  "duration_s": 5.4211,
+  "packet_count": 66,
+  "capture_timestamp": "2026-08-16T17:11:00.359856+00:00",
+  "source": "192.0.2.2",
+  "destination": "192.0.2.2:2540",
+  "capture_command": "tcpdump -i lo -w <pcap> -U -n 'host 192.0.2.2 and (tcp port 2540 or tcp port 20 or tcp portrange 61280-61319)'",
+  "verification_status": "valid",
+  "detail": {
+    "attempts": 3,
+    "successes": 1,
+    "failures": 2,
+    "label_reason": "benign_reconnect_success",
+    "check_errors": []
+  }
+}

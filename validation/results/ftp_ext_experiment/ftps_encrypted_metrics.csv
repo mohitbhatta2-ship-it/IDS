@@ -1,0 +1,5 @@
+model,n,ftp_recall,benign_recall
+production,31,0.0,1.0
+candidate2,31,0.375,1.0
+robust45,31,0.0,1.0
+candidate_ext_unweighted,31,0.0,1.0

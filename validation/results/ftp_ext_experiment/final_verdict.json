@@ -1,0 +1,188 @@
+{
+  "verdict": "TARGET NOT MET",
+  "promote": false,
+  "selected_model": "candidate_ext_unweighted",
+  "target_met": false,
+  "summary": "EXT features did not fix the benign false positives on the frozen vsFTPD test (FTP 1.000, benign 0.836, FPR 0.164). See limitation.",
+  "selected_test": {
+    "ftp_recall": 1.0,
+    "benign_recall": 0.8360655737704918,
+    "false_positive_rate": 0.16393442622950818,
+    "ftp_precision": 0.875,
+    "macro_f1": 0.9220238095238096,
+    "accuracy": 0.9236641221374046
+  },
+  "current_robust45_test": {
+    "ftp_recall": 1.0,
+    "benign_recall": 0.8524590163934426,
+    "false_positive_rate": 0.14754098360655737
+  },
+  "candidate2_test": {
+    "ftp_recall": 0.08571428571428572,
+    "benign_recall": 0.8524590163934426,
+    "false_positive_rate": 0.14754098360655737
+  },
+  "ci_lower_ftp_recall": 1.0,
+  "ci_lower_benign_recall": 0.6037586103623839,
+  "cic_no_regression": true,
+  "single_feature_dependence": true,
+  "max_ftp_recall_drop_dropone": 0.3285714285714286,
+  "max_benign_recall_drop_dropone": -0.0,
+  "gave_up_recall": 0.0,
+  "limitation": "A benign user who fails to authenticate and leaves (gave_up) produces control- and network-level traffic that is near-identical to a short failed brute force; no label-free feature fully separates them. Pacing helps only when benign is human-paced AND the attacker is not; on the vsFTPD test both are shaped by the server's failure-delay timing.",
+  "recommend_next": "Either (a) collect benign failed-login traffic from MULTIPLE real servers so pacing/activity signals generalise beyond one server's timing, or (b) adopt an explicit product policy that 'many failed logins with no success' is treated as suspicious regardless of intent (accepting gave_up as a boundary case), or (c) add source-reputation / cross-session features (repeated connections from one source over time).",
+  "caveats": [
+    "Loopback + vsFTPD single-container lab; benign corpus uses pyftpdlib/custom (vsftpd held out).",
+    "Frozen vsFTPD corpus used for final evaluation ONLY -- never training/selection/tuning.",
+    "No promotion, no threshold/heuristic change, no merge."
+  ],
+  "selection_reason": "CIC-gate=True, LOCO macro-F1 0.9957",
+  "shap": {
+    "top14": [
+      {
+        "feature": "Dst Port",
+        "share": 0.1763592482196209
+      },
+      {
+        "feature": "Fwd Seg Size Min",
+        "share": 0.16064962792438317
+      },
+      {
+        "feature": "Init Fwd Win Byts",
+        "share": 0.09427739637993064
+      },
+      {
+        "feature": "ftp_failed_logins",
+        "share": 0.04232193252614064
+      },
+      {
+        "feature": "Fwd Pkts/s",
+        "share": 0.04096728932087194
+      },
+      {
+        "feature": "Fwd Header Len",
+        "share": 0.03367359426783761
+      },
+      {
+        "feature": "Fwd IAT Min",
+        "share": 0.03329398210495575
+      },
+      {
+        "feature": "Flow IAT Mean",
+        "share": 0.03253329078875853
+      },
+      {
+        "feature": "Flow IAT Min",
+        "share": 0.031613052152635546
+      },
+      {
+        "feature": "Flow Pkts/s",
+        "share": 0.031303185392147805
+      },
+      {
+        "feature": "ftp_failed_login_ratio",
+        "share": 0.02959183470819927
+      },
+      {
+        "feature": "Flow IAT Max",
+        "share": 0.029211564858422547
+      },
+      {
+        "feature": "Flow Duration",
+        "share": 0.021281048462987975
+      },
+      {
+        "feature": "ftp_user_commands",
+        "share": 0.020513322714098194
+      }
+    ],
+    "max_feature": "Dst Port",
+    "max_share": 0.1763592482196209,
+    "failed_logins_share": 0.04232193252614064,
+    "app_layer_share": 0.1204728884481625,
+    "cic_artifact_share": 0.4312862725239347,
+    "ext_share": 0.012633879631609635
+  },
+  "ftps": [
+    {
+      "model": "production",
+      "n": 31,
+      "ftp_recall": 0.0,
+      "benign_recall": 1.0
+    },
+    {
+      "model": "candidate2",
+      "n": 31,
+      "ftp_recall": 0.375,
+      "benign_recall": 1.0
+    },
+    {
+      "model": "robust45",
+      "n": 31,
+      "ftp_recall": 0.0,
+      "benign_recall": 1.0
+    },
+    {
+      "model": "candidate_ext_unweighted",
+      "n": 31,
+      "ftp_recall": 0.0,
+      "benign_recall": 1.0
+    }
+  ],
+  "drop_one": [
+    {
+      "dropped_feature": "ftp_failed_logins",
+      "ftp_recall": 1.0,
+      "benign_recall": 0.9180327868852459,
+      "false_positive_rate": 0.08196721311475409,
+      "macro_f1": 0.9613910993221338,
+      "ftp_recall_delta": 0.0,
+      "benign_recall_delta": 0.08196721311475408
+    },
+    {
+      "dropped_feature": "ftpx_fail_run_before_success",
+      "ftp_recall": 1.0,
+      "benign_recall": 0.8524590163934426,
+      "false_positive_rate": 0.14754098360655737,
+      "macro_f1": 0.9299756488685633,
+      "ftp_recall_delta": 0.0,
+      "benign_recall_delta": 0.016393442622950727
+    },
+    {
+      "dropped_feature": "ftpx_distinct_passwords",
+      "ftp_recall": 1.0,
+      "benign_recall": 0.8524590163934426,
+      "false_positive_rate": 0.14754098360655737,
+      "macro_f1": 0.9299756488685633,
+      "ftp_recall_delta": 0.0,
+      "benign_recall_delta": 0.016393442622950727
+    },
+    {
+      "dropped_feature": "ftpx_interattempt_mean_s",
+      "ftp_recall": 1.0,
+      "benign_recall": 0.8524590163934426,
+      "false_positive_rate": 0.14754098360655737,
+      "macro_f1": 0.9299756488685633,
+      "ftp_recall_delta": 0.0,
+      "benign_recall_delta": 0.016393442622950727
+    },
+    {
+      "dropped_feature": "ftpx_post_auth_commands",
+      "ftp_recall": 1.0,
+      "benign_recall": 0.8360655737704918,
+      "false_positive_rate": 0.16393442622950818,
+      "macro_f1": 0.9220238095238096,
+      "ftp_recall_delta": 0.0,
+      "benign_recall_delta": 0.0
+    },
+    {
+      "dropped_feature": "ftp_user_commands",
+      "ftp_recall": 0.6714285714285714,
+      "benign_recall": 0.9180327868852459,
+      "false_positive_rate": 0.08196721311475409,
+      "macro_f1": 0.7852459016393443,
+      "ftp_recall_delta": -0.3285714285714286,
+      "benign_recall_delta": 0.08196721311475408
+    }
+  ]
+}

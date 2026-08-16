@@ -3353,3 +3353,137 @@ class FinalIndependentValidationResultsTests(TestCase):
         model, _ = ml._load("histgradientboosting")
         acc = float((model.predict(test[ml.FEATURES]) == test["Label"]).mean())
         self.assertAlmostEqual(acc, 0.9803, places=4)
+
+
+# ---------------------------------------------------------------------------
+# Extended-behavioural feature experiment (EXT features + benign failed-login corpus)
+# ---------------------------------------------------------------------------
+
+from predictor import ftp_behavioral_ext as _fbx, retraining_behavioral_ext as _rbe
+
+_BFL_DIR = _P2(__file__).resolve().parents[2] / "validation" / "benign_failed_login_pcaps"
+_HAS_BFL = (_BFL_DIR / "MANIFEST.csv").is_file()
+_EXT_RESULTS = _P2(__file__).resolve().parents[2] / "validation" / "results" / "ftp_ext_experiment"
+_HAS_EXT_RESULTS = (_EXT_RESULTS / "final_verdict.json").is_file()
+_SEP_RESULTS = _P2(__file__).resolve().parents[2] / "validation" / "results" / "ftp_ext_separability"
+
+
+class FtpExtFeatureTests(TestCase):
+    def test_ext_schema_size_and_disjoint_from_15(self):
+        self.assertEqual(len(_fbx.EXT_FEATURES), 12)
+        self.assertTrue(set(_fbx.EXT_FEATURES).isdisjoint(set(_fb.BEHAV_FEATURES)))
+
+    def test_augmented_ext_preserves_30_and_15_in_order(self):
+        self.assertEqual(len(_rbe.FEATURES_AUG_EXT), 57)
+        self.assertEqual(_rbe.FEATURES_AUG_EXT[:30], list(ml.FEATURES))          # 30 preserved, in order
+        self.assertEqual(_rbe.FEATURES_AUG_EXT[30:45], list(_fb.BEHAV_FEATURES))  # 15 preserved, in order
+        self.assertEqual(_rbe.FEATURES_AUG_EXT[45:], list(_fbx.EXT_FEATURES))
+
+    def test_cic_ext_app_features_are_nan_not_zero(self):
+        cicX, _ = _rbe.load_cic_ext()
+        for f in _rbe.APP_FEATURES:
+            self.assertTrue(cicX[f].isna().all(), f)     # genuinely missing, never zero-filled
+
+    @skipUnless(_SCAPY and _HAS_BFL, "scapy + benign failed-login corpus")
+    def test_undefined_timing_is_nan_not_zero(self):
+        # a single-attempt capture cannot define inter-attempt timing -> NaN (no zero-fill)
+        import glob
+        import math
+        for pcap in glob.glob(str(_BFL_DIR / "benign" / "*mistype_slow_1*.pcap")):
+            e = _fbx.ext_features_for_pcap(pcap)
+            # exactly one PASS attempt in the failing-then-... path may still be >=2; assert NaN semantics hold
+            if e["ftpx_distinct_passwords"] < 2:
+                self.assertTrue(math.isnan(e["ftpx_interattempt_mean_s"]))
+
+
+@skipUnless(_HAS_BFL, "benign failed-login corpus not present")
+class BenignFailedLoginCorpusTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        with (_BFL_DIR / "MANIFEST.csv").open() as f:
+            cls.rows = list(csv.DictReader(f))
+        cls.base = _P2(__file__).resolve().parents[2] / "validation"
+
+    def test_disjoint_from_all_prior_and_the_frozen_test(self):
+        new = _pcap_sha_set(_BFL_DIR)
+        for other in ("realistic_pcaps", "realistic_pcaps_v2", "independent_real_pcaps",
+                      "targeted_benign_pcaps", "robustness_pcaps", "robust_train_pcaps",
+                      "independent_ftp_validation_pcaps"):
+            self.assertTrue(new.isdisjoint(_pcap_sha_set(self.base / other)), other)
+
+    def test_all_benign_labels_from_folders(self):
+        for r in self.rows:
+            self.assertEqual(r["label"], "Benign")
+            self.assertTrue(list((_BFL_DIR / "benign").glob(f"{r['capture_id']}_*.pcap")))
+
+    def test_all_verified_valid(self):
+        for r in self.rows:
+            self.assertEqual(r["verification_status"], "valid", r["capture_id"])
+
+    def test_new_addresses_and_ports(self):
+        from predictor import benign_failed_login_capture as bflc
+        self.assertEqual(set(bflc.TRAIN_PORT.values()), {2530, 2540})
+        for addr, _ in bflc.train_environments().values():
+            self.assertTrue(bflc.is_controlled_local(addr))
+
+    @skipUnless(_SCAPY, "scapy")
+    def test_realistic_pacing_present(self):
+        import glob
+        import numpy as _np2
+        means = []
+        for pcap in glob.glob(str(_BFL_DIR / "benign" / "*.pcap")):
+            v = _fbx.ext_features_for_pcap(pcap)["ftpx_interattempt_mean_s"]
+            if v == v:      # not NaN
+                means.append(v)
+        # the corpus was collected with human think-time -> most sessions pace > 50ms
+        self.assertTrue(len(means) > 0 and _np2.mean([m > 0.05 for m in means]) > 0.5)
+
+
+@skipUnless(_HAS_EXT_RESULTS, "committed ext-experiment results not present")
+class FtpExtExperimentResultsTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.verdict = json.loads((_EXT_RESULTS / "final_verdict.json").read_text())
+        cls.hashes = json.loads((_EXT_RESULTS / "model_hashes_before_after.json").read_text())
+        cls.leak = json.loads((_EXT_RESULTS / "leakage_validation.json").read_text())
+
+    def test_verdict_is_expected_and_not_promoted(self):
+        self.assertIn(self.verdict["verdict"], (
+            "TARGET MET -- PROMISING FOR PROMOTION REVIEW", "IMPROVED BUT TARGET NOT MET", "TARGET NOT MET"))
+        self.assertFalse(self.verdict["promote"])
+
+    def test_frozen_unchanged(self):
+        self.assertTrue(self.hashes["unchanged"])
+        self.assertEqual(self.hashes["before"], self.hashes["after"])
+
+    def test_feature_and_leakage_integrity(self):
+        self.assertEqual(self.leak["n_features"], 57)
+        self.assertEqual(self.leak["n_packet_features"], 30)
+        self.assertTrue(self.leak["packet_order_preserved"])
+        self.assertTrue(self.leak["preserved_15_behavioural"])
+        self.assertTrue(self.leak["train_disjoint_from_test"])
+        self.assertTrue(self.leak["no_zero_fill_train"])
+        self.assertTrue(self.leak["no_zero_fill_test"])
+        self.assertIn("CIC", self.leak["selection_used"])
+        self.assertIn("LOCO", self.leak["selection_used"])
+        self.assertIn("NOT the vsFTPD", self.leak["selection_used"])   # test corpus excluded from selection
+
+    def test_dependence_and_ablation_recorded(self):
+        self.assertIn("single_feature_dependence", self.verdict)
+        self.assertIn("drop_one", self.verdict)
+        self.assertIn("limitation", self.verdict)
+        self.assertIn("recommend_next", self.verdict)
+
+    def test_required_files_exist(self):
+        for name in ("final_test_metrics.csv", "cic_heldout_metrics.csv", "drop_one_ablation.csv",
+                     "per_scenario_family_metrics.csv", "bootstrap_cis.json", "leakage_validation.json",
+                     "model_hashes_before_after.json", "final_verdict.json", "report.md"):
+            self.assertTrue((_EXT_RESULTS / name).is_file(), name)
+
+    def test_production_unchanged(self):
+        test = pd.read_parquet(ml.DATA_ROOT / "Processed_Data" / "test_selected.parquet")
+        model, _ = ml._load("histgradientboosting")
+        acc = float((model.predict(test[ml.FEATURES]) == test["Label"]).mean())
+        self.assertAlmostEqual(acc, 0.9803, places=4)

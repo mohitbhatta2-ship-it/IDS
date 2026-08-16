@@ -1,0 +1,12 @@
+scenario_family,label,n_flows,recall,predicted_ftp,predicted_benign
+activity,Benign,20,1.0,0,20
+clean,Benign,8,1.0,0,8
+eventual_success,FTP-BruteForce,7,1.0,7,0
+fast_brute,FTP-BruteForce,21,1.0,21,0
+gave_up,Benign,5,0.0,5,0
+mistype,Benign,12,0.5833,5,7
+multi_conn,FTP-BruteForce,28,1.0,28,0
+multi_user,Benign,8,1.0,0,8
+reconnect,Benign,8,1.0,0,8
+slow_brute,FTP-BruteForce,9,1.0,9,0
+user_enum,FTP-BruteForce,5,1.0,5,0

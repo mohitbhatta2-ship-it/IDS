@@ -1,0 +1,58 @@
+{
+  "unweighted": {
+    "n": 492,
+    "accuracy": 0.9959349593495935,
+    "macro_precision": 0.9947643979057592,
+    "macro_recall": 0.9966996699669968,
+    "macro_f1": 0.9957127919135587,
+    "weighted_f1": 0.9959389266252371,
+    "confusion": {
+      "labels": [
+        "Benign",
+        "FTP-BruteForce"
+      ],
+      "matrix": [
+        [
+          189,
+          0
+        ],
+        [
+          2,
+          301
+        ]
+      ]
+    },
+    "FTP-BruteForce_support": 303,
+    "FTP-BruteForce_recall": 0.9933993399339934,
+    "Benign_support": 189,
+    "Benign_recall": 1.0
+  },
+  "balanced": {
+    "n": 492,
+    "accuracy": 0.9959349593495935,
+    "macro_precision": 0.9947643979057592,
+    "macro_recall": 0.9966996699669968,
+    "macro_f1": 0.9957127919135587,
+    "weighted_f1": 0.9959389266252371,
+    "confusion": {
+      "labels": [
+        "Benign",
+        "FTP-BruteForce"
+      ],
+      "matrix": [
+        [
+          189,
+          0
+        ],
+        [
+          2,
+          301
+        ]
+      ]
+    },
+    "FTP-BruteForce_support": 303,
+    "FTP-BruteForce_recall": 0.9933993399339934,
+    "Benign_support": 189,
+    "Benign_recall": 1.0
+  }
+}

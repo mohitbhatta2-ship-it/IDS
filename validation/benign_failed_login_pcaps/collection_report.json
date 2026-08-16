@@ -1,0 +1,59 @@
+{
+  "experiment": "benign_failed_login_corpus",
+  "created_utc": "2026-08-16T17:11:08.301887+00:00",
+  "purpose": "Realistic benign failed-login dynamics (pacing/reuse/post-auth activity) for TRAINING.",
+  "for_training": true,
+  "labels_from": "scenario folder",
+  "pcap_count": 24,
+  "captures_passing_verification": 24,
+  "total_flows": 93,
+  "total_incomplete_flows": 0,
+  "diversity": {
+    "by_scenario_family": {
+      "mistype": 9,
+      "gave_up": 7,
+      "typo_user": 2,
+      "reconnect": 3,
+      "activity": 2,
+      "multi_user": 1
+    },
+    "by_server": {
+      "custom(custom-raw-socket)": 13,
+      "permissive(pyftpdlib)": 11
+    },
+    "by_mode": {
+      "passive": 23,
+      "active": 1
+    },
+    "by_environment": {
+      "bf20 (127.0.0.20)": 6,
+      "bf21 (127.0.0.21)": 6,
+      "bf22 (127.0.0.22)": 6,
+      "bfhost (192.0.2.2)": 6
+    }
+  },
+  "leakage": {
+    "all_pass": true,
+    "checks": {
+      "disjoint_from_v1": true,
+      "disjoint_from_v2": true,
+      "disjoint_from_independent": true,
+      "disjoint_from_targeted": true,
+      "disjoint_from_robustness": true,
+      "disjoint_from_robust_train": true,
+      "disjoint_from_independent_ftp_val": true,
+      "no_duplicate_within_corpus": true,
+      "labels_only_from_folders": true,
+      "all_verified_valid": true,
+      "disjoint_from_independent_ftp_TEST": true
+    },
+    "n_new": 24
+  },
+  "limitations": [
+    "Loopback lab; pyftpdlib + custom raw-socket servers (NOT vsftpd, to keep the vsFTPD test held-out); benign-only; think-times are synthetic-but-real timing.",
+    "TRAIN-only; disjoint from the frozen independent vsFTPD test."
+  ],
+  "versions": {
+    "python": "3.11.15"
+  }
+}

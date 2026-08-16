@@ -1,0 +1,24 @@
+{
+  "capture_id": "benign_02",
+  "scenario": "mistype_slow_2",
+  "label": "Benign",
+  "client": "python-ftplib",
+  "server": "permissive(pyftpdlib)",
+  "environment": "bf21 (127.0.0.21)",
+  "interface": "lo",
+  "mode": "passive",
+  "scenario_family": "mistype",
+  "attempts": 0,
+  "duration_s": 5.5884,
+  "packet_count": 21,
+  "capture_timestamp": "2026-08-16T17:08:42.478300+00:00",
+  "source": "127.0.0.21",
+  "destination": "127.0.0.21:2540",
+  "capture_command": "tcpdump -i lo -w <pcap> -U -n 'host 127.0.0.21 and (tcp port 2540 or tcp port 20 or tcp portrange 61120-61159)'",
+  "verification_status": "valid",
+  "detail": {
+    "attempts": 0,
+    "client_error": "503 Login with USER first.",
+    "check_errors": []
+  }
+}
