@@ -74,7 +74,8 @@ def extract_real_augmented(sources=("v1", "v2", "targeted")) -> r2.RealFlows:
     live_capture._ensure_live_on_path()
     base = repo_root() / "validation"
     dmap = {"v1": "realistic_pcaps", "v2": "realistic_pcaps_v2",
-            "targeted": "targeted_benign_pcaps", "independent": "independent_real_pcaps"}
+            "targeted": "targeted_benign_pcaps", "independent": "independent_real_pcaps",
+            "robustness": "robustness_pcaps"}
     rows, invalid = [], []
     for src in sources:
         _extract_dir(base / dmap[src], src, rows, invalid)

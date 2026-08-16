@@ -1,0 +1,25 @@
+{
+  "capture_id": "ftpbf_12",
+  "scenario": "curl_bruteforce",
+  "label": "FTP-BruteForce",
+  "client": "curl",
+  "server": "custom(custom-raw-socket)",
+  "environment": "rbhost (192.0.2.2)",
+  "interface": "lo",
+  "mode": "passive",
+  "scenario_family": "all_fail",
+  "attempts": 6,
+  "duration_s": 0.032,
+  "packet_count": 78,
+  "capture_timestamp": "2026-08-16T11:32:51.301280+00:00",
+  "source": "192.0.2.2",
+  "destination": "192.0.2.2:2330",
+  "capture_command": "tcpdump -i lo -w <pcap> -U -n 'host 192.0.2.2 and (tcp port 2330 or tcp port 20 or tcp portrange 64240-64279)'",
+  "verification_status": "valid",
+  "detail": {
+    "attempts": 6,
+    "successes": 0,
+    "failures": 6,
+    "check_errors": []
+  }
+}

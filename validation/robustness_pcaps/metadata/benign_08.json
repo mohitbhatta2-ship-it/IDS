@@ -1,0 +1,25 @@
+{
+  "capture_id": "benign_08",
+  "scenario": "multi_user_session_pyftpd",
+  "label": "Benign",
+  "client": "python-ftplib",
+  "server": "permissive(pyftpdlib)",
+  "environment": "rbhost (192.0.2.2)",
+  "interface": "lo",
+  "mode": "passive",
+  "scenario_family": "multi_user",
+  "attempts": 3,
+  "duration_s": 0.0061,
+  "packet_count": 95,
+  "capture_timestamp": "2026-08-16T11:32:09.646004+00:00",
+  "source": "192.0.2.2",
+  "destination": "192.0.2.2:2340",
+  "capture_command": "tcpdump -i lo -w <pcap> -U -n 'host 192.0.2.2 and (tcp port 2340 or tcp port 20 or tcp portrange 64280-64319)'",
+  "verification_status": "valid",
+  "detail": {
+    "attempts": 3,
+    "successes": 3,
+    "distinct_users": 3,
+    "check_errors": []
+  }
+}

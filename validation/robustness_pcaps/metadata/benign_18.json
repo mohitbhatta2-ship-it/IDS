@@ -1,0 +1,25 @@
+{
+  "capture_id": "benign_18",
+  "scenario": "curl_benign",
+  "label": "Benign",
+  "client": "curl",
+  "server": "custom(custom-raw-socket)",
+  "environment": "rb12 (127.0.0.12)",
+  "interface": "lo",
+  "mode": "passive",
+  "scenario_family": "activity",
+  "attempts": 1,
+  "duration_s": 0.0436,
+  "packet_count": 38,
+  "capture_timestamp": "2026-08-16T11:32:27.366163+00:00",
+  "source": "127.0.0.12",
+  "destination": "127.0.0.12:2330",
+  "capture_command": "tcpdump -i lo -w <pcap> -U -n 'host 127.0.0.12 and (tcp port 2330 or tcp port 20 or tcp portrange 64080-64119)'",
+  "verification_status": "valid",
+  "detail": {
+    "attempts": 1,
+    "successes": 1,
+    "client_rc": 0,
+    "check_errors": []
+  }
+}

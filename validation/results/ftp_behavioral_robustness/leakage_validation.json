@@ -1,0 +1,13 @@
+{
+  "robustness_disjoint_from_all_prior": true,
+  "test_only": true,
+  "labels_from_folders": true,
+  "no_zero_fill": true,
+  "n_features": 45,
+  "training_sources": [
+    "v1",
+    "v2",
+    "targeted"
+  ],
+  "messy_corpus_used_for": "evaluation/ablation only (never training/selection)"
+}

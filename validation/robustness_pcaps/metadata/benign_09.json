@@ -1,0 +1,25 @@
+{
+  "capture_id": "benign_09",
+  "scenario": "wrong_user_then_correct",
+  "label": "Benign",
+  "client": "python-ftplib",
+  "server": "custom(custom-raw-socket)",
+  "environment": "rb11 (127.0.0.11)",
+  "interface": "lo",
+  "mode": "passive",
+  "scenario_family": "typo_user",
+  "attempts": 2,
+  "duration_s": 0.0431,
+  "packet_count": 38,
+  "capture_timestamp": "2026-08-16T11:32:11.423728+00:00",
+  "source": "127.0.0.11",
+  "destination": "127.0.0.11:2330",
+  "capture_command": "tcpdump -i lo -w <pcap> -U -n 'host 127.0.0.11 and (tcp port 2330 or tcp port 20 or tcp portrange 64000-64039)'",
+  "verification_status": "valid",
+  "detail": {
+    "attempts": 2,
+    "successes": 1,
+    "label_reason": "benign_typo_user",
+    "check_errors": []
+  }
+}

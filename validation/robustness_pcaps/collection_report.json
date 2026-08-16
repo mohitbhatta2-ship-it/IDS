@@ -1,0 +1,73 @@
+{
+  "experiment": "robustness_stress_test_corpus",
+  "created_utc": "2026-08-16T11:32:56.954205+00:00",
+  "purpose": "Stress-test the behavioural model on messy, ambiguous FTP auth behaviour.",
+  "test_only": true,
+  "labels_from": "scenario folder (never predictions)",
+  "pcap_count": 34,
+  "benign_count": 20,
+  "ftp_bruteforce_count": 14,
+  "captures_passing_verification": 34,
+  "total_flows": 170,
+  "total_incomplete_flows": 0,
+  "diversity": {
+    "by_scenario_family": {
+      "mistype": 5,
+      "gave_up": 2,
+      "multi_user": 2,
+      "typo_user": 1,
+      "activity": 7,
+      "reconnect": 1,
+      "incomplete": 2,
+      "all_fail": 8,
+      "eventual_success": 6
+    },
+    "by_client": {
+      "python-ftplib": 29,
+      "curl": 2,
+      "wget": 1,
+      "raw-socket": 2
+    },
+    "by_server": {
+      "custom(custom-raw-socket)": 20,
+      "permissive(pyftpdlib)": 14
+    },
+    "by_mode": {
+      "passive": 31,
+      "active": 3
+    },
+    "by_environment": {
+      "rb11 (127.0.0.11)": 9,
+      "rb12 (127.0.0.12)": 9,
+      "rb13 (127.0.0.13)": 8,
+      "rbhost (192.0.2.2)": 8
+    }
+  },
+  "adversarial_families": [
+    "mistype (benign fails then succeeds)",
+    "gave_up (benign fails then quits)",
+    "eventual_success (attack that guesses right)",
+    "incomplete (no auth evidence)",
+    "multi_user"
+  ],
+  "leakage": {
+    "all_pass": true,
+    "checks": {
+      "disjoint_from_v1": true,
+      "disjoint_from_v2": true,
+      "disjoint_from_independent": true,
+      "disjoint_from_targeted": true,
+      "no_duplicate_within_corpus": true,
+      "labels_only_from_folders": true,
+      "all_verified_valid": true
+    },
+    "n_new": 34
+  },
+  "limitations": [
+    "Loopback / host-local lab only; two server implementations; no FTPS/TLS.",
+    "Test-only corpus; never used for training/selection/tuning."
+  ],
+  "versions": {
+    "python": "3.11.15"
+  }
+}

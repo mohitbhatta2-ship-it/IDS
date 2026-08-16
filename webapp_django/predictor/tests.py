@@ -2898,3 +2898,144 @@ class BehaviouralResultsTests(TestCase):
         model, _ = ml._load("histgradientboosting")
         acc = float((model.predict(test[ml.FEATURES]) == test["Label"]).mean())
         self.assertAlmostEqual(acc, 0.9803, places=4)
+
+
+# ---------------------------------------------------------------------------
+# Behavioural-model robustness stress-test + ablation (frozen models)
+# ---------------------------------------------------------------------------
+
+from predictor import robustness_capture as _rc
+
+_ROB_DIR = _P2(__file__).resolve().parents[2] / "validation" / "robustness_pcaps"
+_HAS_ROB = (_ROB_DIR / "MANIFEST.csv").is_file()
+_ROB_RESULTS = _P2(__file__).resolve().parents[2] / "validation" / "results" / "ftp_behavioral_robustness"
+_HAS_ROB_RESULTS = (_ROB_RESULTS / "final_verdict.json").is_file()
+
+
+class RobustnessCaptureFrameworkTests(TestCase):
+    def test_new_ports_and_addresses_disjoint_from_prior(self):
+        # robustness uses new ports 2330/2340 and 127.0.0.11-13 (not used before)
+        self.assertEqual(set(_rc.SERVER_PORT.values()), {2330, 2340})
+        for addr, _ in _rc.environments().values():
+            self.assertTrue(_rc.is_controlled_local(addr))
+
+    def test_specs_include_the_adversarial_families(self):
+        fams = {s.family for s in _rc.specs()}
+        for f in ("mistype", "gave_up", "eventual_success", "incomplete", "multi_user"):
+            self.assertIn(f, fams)
+
+    def test_multi_user_credentials_defined(self):
+        self.assertIn("alice", _rc.ALL_USERS)
+        self.assertIn("bob", _rc.ALL_USERS)
+        self.assertEqual(_rc.ALL_USERS[_rc.USER], _rc.PASSWORD)
+
+
+class BehaviouralAblationSchemaTests(TestCase):
+    def test_ablation_feature_sets_are_distinct_sizes(self):
+        from predictor.management.commands.ftp_behavioral_robustness import FEAT_NO_FAILED, FAILED
+        self.assertEqual(len(list(ml.FEATURES)), 30)
+        self.assertEqual(len(_fb.BEHAV_FEATURES), 15)
+        self.assertEqual(len(_rbh.FEATURES_AUG), 45)
+        self.assertEqual(len(FEAT_NO_FAILED), 44)
+        self.assertNotIn(FAILED, FEAT_NO_FAILED)
+        self.assertIn(FAILED, _rbh.FEATURES_AUG)
+
+
+@skipUnless(_HAS_ROB, "robustness corpus not present")
+class RobustnessCorpusArtifactTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        with (_ROB_DIR / "MANIFEST.csv").open() as f:
+            cls.rows = list(csv.DictReader(f))
+        cls.base = _P2(__file__).resolve().parents[2] / "validation"
+
+    def test_disjoint_from_all_prior_corpora(self):
+        new = _pcap_sha_set(_ROB_DIR)
+        for other in ("realistic_pcaps", "realistic_pcaps_v2", "independent_real_pcaps", "targeted_benign_pcaps"):
+            self.assertTrue(new.isdisjoint(_pcap_sha_set(self.base / other)), other)
+
+    def test_no_duplicate_pcaps(self):
+        hashes = {}
+        for p in _ROB_DIR.rglob("*.pcap"):
+            h = _hashlib.sha256(p.read_bytes()).hexdigest()
+            self.assertNotIn(h, hashes); hashes[h] = p.name
+
+    def test_labels_from_folders(self):
+        for r in self.rows:
+            folder = "benign" if r["label"] == "Benign" else "ftp_bruteforce"
+            self.assertTrue(list((_ROB_DIR / folder).glob(f"{r['capture_id']}_*.pcap")))
+            self.assertIn(r["label"], ("Benign", "FTP-BruteForce"))
+
+    def test_all_verified_valid(self):
+        for r in self.rows:
+            self.assertEqual(r["verification_status"], "valid", r["capture_id"])
+
+    @skipUnless(_SCAPY and _train_parquet() is not None, "scapy+parquet")
+    def test_extraction_thirty_ordered_finite_no_zero_fill(self):
+        from predictor import pcap_validation as pv
+        live_capture._ensure_live_on_path()
+        sample = [r for r in self.rows if r["capture_id"] in ("benign_01", "ftpbf_01")]
+        for r in sample:
+            folder = "benign" if r["label"] == "Benign" else "ftp_bruteforce"
+            pcap = next((_ROB_DIR / folder).glob(f"{r['capture_id']}_*.pcap"))
+            for fl in pv.replay_pcap(pcap):
+                self.assertIsNone(pv._feature_problem(fl["features"]))
+                self.assertEqual([f for f in fl["features"] if f in ml.FEATURES], list(ml.FEATURES))
+
+    @skipUnless(_SCAPY, "scapy")
+    def test_messy_scenarios_produce_ambiguous_signatures(self):
+        # a benign gave_up capture has failed logins and NO successful auth (looks attack-like)
+        import glob
+        gu = glob.glob(str(_ROB_DIR / "benign" / "*failed_then_disconnect*.pcap"))
+        if gu:
+            b = _fb.behavioural_features_for_pcap(gu[0])
+            self.assertGreater(b["ftp_failed_logins"], 0)
+            self.assertEqual(b["ftp_has_successful_auth"], 0.0)
+        # a brute force eventual_success capture DOES authenticate (looks benign-ish)
+        ev = glob.glob(str(_ROB_DIR / "ftp_bruteforce" / "*eventual_success*.pcap"))
+        if ev:
+            b = _fb.behavioural_features_for_pcap(ev[0])
+            self.assertEqual(b["ftp_has_successful_auth"], 1.0)
+            self.assertGreater(b["ftp_failed_logins"], 0)
+
+
+@skipUnless(_HAS_ROB_RESULTS, "committed robustness results not present")
+class RobustnessResultsTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.verdict = json.loads((_ROB_RESULTS / "final_verdict.json").read_text())
+        cls.hashes = json.loads((_ROB_RESULTS / "model_hashes_before_after.json").read_text())
+        cls.leak = json.loads((_ROB_RESULTS / "leakage_validation.json").read_text())
+
+    def test_verdict_is_one_of_the_four(self):
+        self.assertIn(self.verdict["verdict"], ("PROMISING AND ROBUST", "PROMISING BUT NEEDS MORE DATA",
+                                                "BEHAVIORAL FEATURE IS A LABEL SHORTCUT", "DO NOT PROMOTE"))
+        self.assertFalse(self.verdict["promote"])
+
+    def test_frozen_artifacts_unchanged(self):
+        self.assertTrue(self.hashes["unchanged"])
+        self.assertEqual(self.hashes["before"], self.hashes["after"])
+
+    def test_messy_corpus_test_only(self):
+        self.assertTrue(self.leak["robustness_disjoint_from_all_prior"])
+        self.assertTrue(self.leak["test_only"])
+        self.assertTrue(self.leak["no_zero_fill"])
+
+    def test_ablation_recorded(self):
+        self.assertIn("ftp_recall_drop_without_failed_logins", self.verdict)
+        self.assertIn("is_label_shortcut", self.verdict)
+
+    def test_required_files_exist(self):
+        for name in ("ablation_and_model_metrics.csv", "per_scenario_family_metrics.csv",
+                     "per_scenario_metrics.csv", "per_client_metrics.csv", "per_server_metrics.csv",
+                     "confidence_distribution.csv", "leakage_validation.json",
+                     "model_hashes_before_after.json", "final_verdict.json", "report.md"):
+            self.assertTrue((_ROB_RESULTS / name).is_file(), name)
+
+    def test_production_unchanged(self):
+        test = pd.read_parquet(ml.DATA_ROOT / "Processed_Data" / "test_selected.parquet")
+        model, _ = ml._load("histgradientboosting")
+        acc = float((model.predict(test[ml.FEATURES]) == test["Label"]).mean())
+        self.assertAlmostEqual(acc, 0.9803, places=4)

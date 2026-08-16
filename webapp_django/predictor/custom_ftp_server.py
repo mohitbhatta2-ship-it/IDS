@@ -25,9 +25,13 @@ import threading
 
 
 class CustomFTPServer:
-    def __init__(self, addr, port, root, user, pw, passive_lo, passive_hi):
+    def __init__(self, addr, port, root, user, pw, passive_lo, passive_hi, extra_users=None):
         self.addr, self.port, self.root = addr, port, root
         self.user, self.pw = user, pw
+        # optional additional valid credentials (backward compatible: default none)
+        self.users = {user: pw}
+        if extra_users:
+            self.users.update(extra_users)
         self.plo, self.phi, self._pp = passive_lo, passive_hi, passive_lo
         self._lock = threading.Lock()
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -88,7 +92,7 @@ class CustomFTPServer:
                 user = arg
                 send("331 need password")
             elif up.startswith("PASS"):
-                if user == self.user and arg == self.pw:
+                if user in self.users and arg == self.users[user]:
                     authed = True
                     send("230 login ok")
                 else:
@@ -197,7 +201,14 @@ def main():
     addr, port, root, user, pw, plo, phi = (
         sys.argv[1], int(sys.argv[2]), sys.argv[3], sys.argv[4], sys.argv[5],
         int(sys.argv[6]), int(sys.argv[7]))
-    CustomFTPServer(addr, port, root, user, pw, plo, phi).serve()
+    # optional argv[8]: extra users as "u1:p1,u2:p2" (backward compatible if absent)
+    extra = {}
+    if len(sys.argv) > 8 and sys.argv[8]:
+        for pair in sys.argv[8].split(","):
+            if ":" in pair:
+                u, p = pair.split(":", 1)
+                extra[u] = p
+    CustomFTPServer(addr, port, root, user, pw, plo, phi, extra_users=extra).serve()
 
 
 if __name__ == "__main__":

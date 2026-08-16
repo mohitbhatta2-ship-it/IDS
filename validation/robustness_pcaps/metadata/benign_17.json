@@ -1,0 +1,25 @@
+{
+  "capture_id": "benign_17",
+  "scenario": "interrupted_no_auth_pyftpd",
+  "label": "Benign",
+  "client": "python-ftplib",
+  "server": "permissive(pyftpdlib)",
+  "environment": "rb11 (127.0.0.11)",
+  "interface": "lo",
+  "mode": "passive",
+  "scenario_family": "incomplete",
+  "attempts": 0,
+  "duration_s": 0.0008,
+  "packet_count": 11,
+  "capture_timestamp": "2026-08-16T11:32:25.664267+00:00",
+  "source": "127.0.0.11",
+  "destination": "127.0.0.11:2340",
+  "capture_command": "tcpdump -i lo -w <pcap> -U -n 'host 127.0.0.11 and (tcp port 2340 or tcp port 20 or tcp portrange 64040-64079)'",
+  "verification_status": "valid",
+  "detail": {
+    "attempts": 0,
+    "successes": 0,
+    "label_reason": "benign_interrupted_no_auth",
+    "check_errors": []
+  }
+}
