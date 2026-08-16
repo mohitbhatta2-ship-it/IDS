@@ -2296,3 +2296,117 @@ class IndependentTestResultsTests(TestCase):
         model, _ = ml._load("histgradientboosting")
         acc = float((model.predict(test[ml.FEATURES]) == test["Label"]).mean())
         self.assertAlmostEqual(acc, 0.9803, places=4)
+
+
+# ---------------------------------------------------------------------------
+# Final robustness analysis (analysis-only; frozen-artifact invariants)
+# ---------------------------------------------------------------------------
+
+from predictor import robustness_analysis as _ra
+
+_ROBUST_RESULTS = _P2(__file__).resolve().parents[2] / "validation" / "results" / "final_robustness"
+_HAS_ROBUST = (_ROBUST_RESULTS / "final_robustness_verdict.json").is_file()
+_ROBUST_READY = _SCAPY and _train_parquet() is not None and _INDEP_DIR.is_dir() \
+    and (_INDEP_DIR / "MANIFEST.csv").is_file()
+
+
+@skipUnless(_ROBUST_READY, "scapy + parquet + independent corpus required")
+class FinalRobustnessAnalysisTests(TestCase):
+    """The analysis is read-only and honours data separation."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        live_capture._ensure_live_on_path()
+        cls.df = _ra.build_frame()
+
+    def test_frame_covers_all_independent_flows_only(self):
+        # exactly the independent test flows, no more, no fewer
+        self.assertEqual(len(self.df), 420)
+        self.assertEqual(self.df["capture"].nunique(), 36)
+        self.assertTrue(set(self.df["Label"]) <= {"Benign", "FTP-BruteForce"})
+
+    def test_analysis_uses_exactly_thirty_ordered_features(self):
+        feat = [c for c in self.df.columns if c in ml.FEATURES]
+        self.assertEqual(feat, list(ml.FEATURES))
+        self.assertEqual(len(feat), 30)
+        self.assertTrue(_np.isfinite(self.df[ml.FEATURES].to_numpy()).all())
+
+    def test_candidate_metrics_match_frozen_independent_test(self):
+        ftp = self.df[self.df["Label"] == "FTP-BruteForce"]
+        ben = self.df[self.df["Label"] == "Benign"]
+        self.assertAlmostEqual(float((ftp["cand_pred"] == "FTP-BruteForce").mean()), 0.7544, places=3)
+        self.assertAlmostEqual(float((ben["cand_pred"] != "Benign").mean()), 0.2821, places=3)
+
+    def test_error_groups_partition_the_flows(self):
+        counts = self.df["error_group"].value_counts()
+        self.assertEqual(int(counts.sum()), len(self.df))
+        for g in ("TP_FTP", "FN_FTP", "TP_Benign", "FP_Benign"):
+            self.assertIn(g, counts.index)
+
+    def test_no_independent_pcap_is_in_any_training_corpus(self):
+        # data separation: independent PCAPs are hash-disjoint from v1 and v2
+        base = _P2(__file__).resolve().parents[2] / "validation"
+        indep = _pcap_sha_set(_INDEP_DIR)
+        self.assertTrue(indep.isdisjoint(_pcap_sha_set(base / "realistic_pcaps")))
+        self.assertTrue(indep.isdisjoint(_pcap_sha_set(base / "realistic_pcaps_v2")))
+
+    def test_group_metrics_report_support(self):
+        g = _ra.group_metrics(self.df, "client")
+        self.assertIn("flows", g.columns)
+        self.assertIn("ftp_support", g.columns)
+        self.assertIn("benign_support", g.columns)
+
+
+class FinalRobustnessSafetyTests(TestCase):
+    """Frozen-artifact invariants that must hold regardless of the analysis run."""
+
+    def test_ml_pcap_validation_live_capture_import_cleanly(self):
+        # the analysis modules must not have monkeypatched the frozen pipeline
+        import importlib
+        for mod in ("predictor.ml", "predictor.pcap_validation", "predictor.live_capture"):
+            self.assertTrue(importlib.import_module(mod))
+
+    def test_production_model_scores_its_known_number(self):
+        test = pd.read_parquet(ml.DATA_ROOT / "Processed_Data" / "test_selected.parquet")
+        model, _ = ml._load("histgradientboosting")
+        acc = float((model.predict(test[ml.FEATURES]) == test["Label"]).mean())
+        self.assertAlmostEqual(acc, 0.9803, places=4)
+
+    def test_candidate2_artifact_lives_outside_production_dir(self):
+        cand = (_P2(__file__).resolve().parents[2] / "validation" / "models"
+                / "realistic_pcap_candidate_v2" / "candidate2_none.pkl")
+        if cand.is_file():
+            self.assertNotIn(str(ml.MODELS_DIR.resolve()), str(cand.resolve()))
+
+
+@skipUnless(_HAS_ROBUST, "committed final_robustness results not present")
+class FinalRobustnessResultsTests(TestCase):
+    """Validate the committed robustness evidence + its safety flags."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.verdict = json.loads((_ROBUST_RESULTS / "final_robustness_verdict.json").read_text())
+        cls.reqs = json.loads((_ROBUST_RESULTS / "data_requirements.json").read_text())
+
+    def test_verdict_safety_flags(self):
+        for k in ("candidate_promote", "retraining_performed", "threshold_changed",
+                  "heuristics_added", "production_model_changed"):
+            self.assertFalse(self.verdict[k], k)
+        self.assertTrue(self.verdict["independent_test_frozen"])
+
+    def test_recommendation_is_one_of_the_three_options(self):
+        self.assertTrue(self.verdict["recommendation_choice"].startswith(("A.", "B.", "C.")))
+
+    def test_data_requirements_are_ranked(self):
+        ranks = [r["rank"] for r in self.reqs["ranked_recommendations"]]
+        self.assertEqual(ranks, sorted(ranks))
+
+    def test_required_evidence_files_exist(self):
+        for name in ("benign_fp_breakdown.csv", "scenario_metrics.csv",
+                     "client_server_metrics.csv", "mode_metrics.csv",
+                     "feature_distribution_final.csv", "shap_error_groups.csv",
+                     "confidence_error_groups.csv", "capture_metrics.csv",
+                     "data_requirements.json", "final_robustness_verdict.json", "report.md"):
+            self.assertTrue((_ROBUST_RESULTS / name).is_file(), name)

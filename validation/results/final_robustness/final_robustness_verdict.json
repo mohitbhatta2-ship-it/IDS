@@ -1,0 +1,32 @@
+{
+  "candidate_promote": false,
+  "independent_test_frozen": true,
+  "retraining_performed": false,
+  "threshold_changed": false,
+  "heuristics_added": false,
+  "production_model_changed": false,
+  "independent_ftp_recall": 0.7544,
+  "independent_benign_fp_rate": 0.2821,
+  "benign_fp_confidently_wrong_fraction": 0.2727,
+  "candidate_still_cic_artifact_dependent": true,
+  "capture_summary": {
+    "n_ftp_captures": 18,
+    "n_benign_captures": 18,
+    "pct_ftp_recall_ge_0.5": 0.8889,
+    "pct_ftp_recall_ge_0.75": 0.5556,
+    "pct_ftp_recall_ge_0.9": 0.5556,
+    "pct_benign_captures_zero_fp": 0.1111
+  },
+  "recommendation_choice": "B. Collect another specifically targeted real-PCAP corpus",
+  "recommendation": "Collect a targeted real-PCAP corpus (highest-ranked: benign command-heavy / active-mode sessions, more transfer sessions, and additional server implementations), then RE-EVALUATE on a fresh independent set before any retraining. Do not run another training experiment yet: the benign FP cause is structured and addressable with data, but there is not yet enough evidence that retraining on the current corpora would fix it without a new independent test.",
+  "top_data_requirements": [
+    "real multi-host LAN traffic with additional OSes and FTP clients",
+    "more benign upload/download sessions across clients",
+    "more FTP brute-force diversity (tools/pacing/patterns) targeting the weakest scenarios"
+  ],
+  "caveats": [
+    "Independent corpus is small (36 captures / 420 flows), loopback-only, 2 classes.",
+    "Findings are model-attribution evidence (SHAP/confidence/grouping), not proven causation.",
+    "No statistical-significance claim."
+  ]
+}
