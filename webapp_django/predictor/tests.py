@@ -4165,3 +4165,165 @@ class FtpAuthForensicsResultsTests(TestCase):
         model, _ = ml._load("histgradientboosting")
         acc = float((model.predict(test[ml.FEATURES]) == test["Label"]).mean())
         self.assertAlmostEqual(acc, 0.9803, places=4)
+
+
+# ---------------------------------------------------------------------------
+# Live FTP-BruteForce detector (experimental candidate wired into live capture)
+# ---------------------------------------------------------------------------
+
+from predictor import ftp_live as _flive
+
+_PCDIR = _P2(__file__).resolve().parents[2] / "validation" / "per_connection_pcaps"
+_AFDIR = _P2(__file__).resolve().parents[2] / "validation" / "auth_forensics_pcaps"
+
+
+def _first_pcap(*globs):
+    import glob as _glob
+    for g in globs:
+        hits = sorted(_glob.glob(g))
+        if hits:
+            return hits[0]
+    return None
+
+
+class FtpLiveFeatureSchemaTests(TestCase):
+    """Feature extraction / schema: the candidate's 67 features, order preserved, no zero-fill."""
+
+    def test_features_pc_shape_and_order(self):
+        self.assertEqual(len(_flive.FEATURES_PC), 67)
+        self.assertEqual(_flive.FEATURES_PC[:30], list(ml.FEATURES))     # 30 packet features, in order
+        self.assertEqual(len(_flive.APP_FEATURES), 37)                   # 13 behav + 11 pc + 13 cross
+        self.assertEqual(_flive.FEATURES_PC[30:], _flive.APP_FEATURES)
+
+    def test_candidate_not_in_production_registry(self):
+        # the experimental key must never touch the production model registry / paths
+        self.assertNotIn(_flive.CANDIDATE_KEY, ml.MODEL_REGISTRY)
+        desc = _flive.available_model()
+        self.assertEqual(desc["key"], _flive.CANDIDATE_KEY)
+        self.assertTrue(desc["experimental"])
+
+    def test_candidate_model_file_is_the_validated_per_connection_candidate(self):
+        self.assertTrue(str(_flive.candidate_path()).endswith(
+            "validation/models/ftp-per-connection/candidate_pc_unweighted.pkl"))
+
+    @skipUnless(_SCAPY, "scapy required")
+    def test_app_features_from_pcap_no_zero_fill(self):
+        import numpy as _np
+        pcap = _first_pcap(str(_AFDIR / "ftp_bruteforce" / "*dict_fail*.pcap"),
+                            str(_PCDIR / "ftp_bruteforce" / "*single_packed*.pcap"))
+        if not pcap:
+            self.skipTest("no FTP attacker corpus present")
+        app, behav = _flive.app_features_from_pcap(pcap)
+        self.assertEqual(sorted(app.keys()), sorted(_flive.APP_FEATURES))
+        self.assertGreaterEqual(behav["ftp_login_attempts"], 1)
+        # undefined measurements are preserved as NaN rather than zero-filled upstream
+        self.assertTrue(any(isinstance(v, float) and _np.isnan(v) for v in app.values())
+                        or behav["ftp_failed_logins"] >= 1)
+
+
+class FtpLivePredictionTests(TestCase):
+    """Live prediction path: candidate loads and scores, NaN app features handled natively."""
+
+    def test_candidate_loads_and_decodes(self):
+        model, decode = _flive.load_candidate()
+        self.assertEqual(len(model.classes_), 15)
+        self.assertEqual(decode.get(0), "Benign")
+        self.assertIn("FTP-BruteForce", set(decode.values()))
+
+    def test_predict_on_nan_app_row_is_valid(self):
+        import numpy as _np
+        sess = _flive.FtpLiveCaptureSession(interface=None)
+        row = {f: 0.0 for f in ml.FEATURES}
+        for f in _flive.APP_FEATURES:
+            row[f] = _np.nan
+        pred = sess._predict(row)
+        self.assertIn("label", pred)
+        self.assertGreaterEqual(pred["confidence"], 0.0)
+        self.assertLessEqual(pred["confidence"], 1.0)
+        self.assertEqual(pred["is_attack"], pred["label"] != "Benign")
+
+
+class FtpLiveMissingFeatureTests(TestCase):
+    """Missing-feature handling: non-FTP and encrypted FTPS -> NaN app features, flagged."""
+
+    def test_build_row_non_ftp_all_app_nan(self):
+        import numpy as _np
+        sess = _flive.FtpLiveCaptureSession(interface=None)
+        feat30 = {f: 0.0 for f in ml.FEATURES}
+        row, avail, reason, info = sess._build_row(feat30, None, False)
+        self.assertFalse(avail)
+        self.assertEqual(reason, "no-ftp-control")
+        self.assertTrue(all(isinstance(row[f], float) and _np.isnan(row[f]) for f in _flive.APP_FEATURES))
+        # the 30 packet features are still present and in order (never dropped)
+        self.assertEqual([f for f in ml.FEATURES if f in row], list(ml.FEATURES))
+
+    def test_build_row_ftps_flagged_encrypted(self):
+        import numpy as _np
+        sess = _flive.FtpLiveCaptureSession(interface=None)
+        feat30 = {f: 0.0 for f in ml.FEATURES}
+        row, avail, reason, info = sess._build_row(feat30, ("10.0.0.5", "10.0.0.9"), True)
+        self.assertFalse(avail)
+        self.assertEqual(reason, "encrypted-ftps")
+        self.assertTrue(all(isinstance(row[f], float) and _np.isnan(row[f]) for f in _flive.APP_FEATURES))
+
+    def test_payload_role_and_auth_tls_helpers(self):
+        self.assertEqual(_flive._payload_role(b"230 Login successful.\r\n"), "resp")
+        self.assertEqual(_flive._payload_role(b"USER alice\r\n"), "cmd")
+        self.assertIsNone(_flive._payload_role(b"GET / HTTP/1.1\r\n"))
+        self.assertTrue(_flive._is_auth_tls(b"AUTH TLS\r\n"))
+        self.assertFalse(_flive._is_auth_tls(b"USER bob\r\n"))
+
+    @skipUnless(_SCAPY, "scapy required")
+    def test_ftps_stream_marked_and_scored_from_packets_only(self):
+        _flive.live_capture._ensure_live_on_path()
+        from scapy.layers.inet import IP, TCP
+        from scapy.packet import Raw
+        sess = _flive.FtpLiveCaptureSession(interface=None)
+        t = 1000.0
+        a = IP(src="10.0.0.5", dst="10.0.0.9") / TCP(sport=52000, dport=21, flags="PA") / Raw(load=b"AUTH TLS\r\n"); a.time = t
+        enc = IP(src="10.0.0.9", dst="10.0.0.5") / TCP(sport=21, dport=52000, flags="PA") / Raw(load=bytes(range(30))); enc.time = t + 0.2
+        rst = IP(src="10.0.0.5", dst="10.0.0.9") / TCP(sport=52000, dport=21, flags="R"); rst.time = t + 0.3
+        for p in (a, enc, rst):
+            sess._handle(p)
+        sess._flush_all()
+        recs = sess.snapshot()["recent"]
+        self.assertTrue(recs)
+        self.assertFalse(recs[0]["behavioral_available"])
+        self.assertEqual(recs[0]["behavioral_reason"], "encrypted-ftps")
+
+
+@skipUnless(_SCAPY, "scapy required")
+class FtpLiveEndToEndTests(TestCase):
+    """End-to-end: replay corpus pcaps through the live session and check detections."""
+
+    def _run(self, pcap):
+        _flive.live_capture._ensure_live_on_path()
+        from scapy.all import rdpcap
+        sess = _flive.FtpLiveCaptureSession(interface=None)
+        for pk in rdpcap(pcap):
+            sess._handle(pk)
+        sess._flush_all()
+        return sess.snapshot()
+
+    def test_attacker_pcap_yields_ftp_bruteforce(self):
+        pcap = _first_pcap(str(_PCDIR / "ftp_bruteforce" / "*single_packed*.pcap"),
+                            str(_AFDIR / "ftp_bruteforce" / "*dict_fail*.pcap"))
+        if not pcap:
+            self.skipTest("no FTP attacker corpus present")
+        snap = self._run(pcap)
+        self.assertGreaterEqual(snap["flows"], 1)
+        ftp = [r for r in snap["recent"] if r["is_ftp_bruteforce"]]
+        self.assertTrue(ftp, "expected an FTP-BruteForce detection on a packed attack capture")
+        self.assertTrue(any(r["behavioral_available"] for r in ftp))
+        self.assertEqual(snap["detector"], "ftp")
+        self.assertEqual(snap["model_key"], _flive.CANDIDATE_KEY)
+
+    def test_benign_pcap_scores_benign(self):
+        pcap = _first_pcap(str(_AFDIR / "benign" / "*clean*.pcap"),
+                            str(_PCDIR / "benign" / "*.pcap"))
+        if not pcap:
+            self.skipTest("no benign FTP corpus present")
+        snap = self._run(pcap)
+        self.assertGreaterEqual(snap["flows"], 1)
+        self.assertEqual(snap["ftp_detections"], 0)
+        self.assertTrue(any(r["behavioral_available"] for r in snap["recent"]))

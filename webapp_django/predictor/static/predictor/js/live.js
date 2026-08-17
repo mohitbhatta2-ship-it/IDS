@@ -69,6 +69,23 @@
     });
   }
 
+  var ftpMode = false;
+
+  function ftpCells(rec) {
+    // Extra columns for the FTP detector: behavioural availability and session summary.
+    if (!ftpMode) return "";
+    var avail = rec.behavioral_available
+      ? '<span class="pill" title="cleartext FTP control features used">available</span>'
+      : '<span class="pill" title="' + esc(rec.behavioral_reason || "") + '">' +
+        (rec.behavioral_reason === "encrypted-ftps" ? "FTPS (encrypted)" : "n/a") + "</span>";
+    var s = rec.session || {};
+    var sess = (s.login_attempts != null)
+      ? esc(s.login_attempts) + " attempt(s), " + esc(s.failed_logins || 0) + " failed, " +
+        esc(s.control_connections || 0) + " conn"
+      : "—";
+    return "<td>" + avail + "</td><td>" + sess + "</td>";
+  }
+
   function rowFor(rec) {
     var tr = document.createElement("tr");
     tr.className = "fam-" + rec.family + (rec.is_attack ? " is-attack-row" : "");
@@ -85,8 +102,15 @@
       "<td>" + esc(rec.protocol) + "</td>" +
       '<td class="num">' + esc(rec.packets) + "</td>" +
       "<td>" + verdict + "</td>" +
-      '<td class="num">' + pct + "</td>";
+      '<td class="num">' + pct + "</td>" +
+      ftpCells(rec);
     return tr;
+  }
+
+  function setFtpMode(on) {
+    if (ftpMode === on) return;
+    ftpMode = on;
+    document.querySelectorAll("[data-ftp-only]").forEach(function (el) { el.hidden = !on; });
   }
 
   function appendRecords(records) {
@@ -104,9 +128,11 @@
   }
 
   function applyStatus(data) {
+    setFtpMode(data.detector === "ftp");
     setMetric("packets", data.packets || 0);
     setMetric("flows", data.flows || 0);
     setMetric("attacks", data.attacks || 0);
+    setMetric("ftp", data.ftp_detections || 0);
     setMetric("open", data.open_flows || 0);
     appendRecords(data.recent);
     showError(data.error || null);

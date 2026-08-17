@@ -6,8 +6,35 @@ from django.shortcuts import redirect, render
 from django.utils.timezone import localtime
 from django.views.decorators.http import require_http_methods
 
-from . import classes, history_log, live_capture, ml
+from . import classes, ftp_live, history_log, live_capture, ml
 from .forms import BatchUploadForm, ManualFlowForm
+
+
+def _live_managers():
+    """The live-capture managers, production first then the experimental FTP detector."""
+    return (live_capture.manager, ftp_live.manager)
+
+
+def _current_live_session():
+    """
+    The session the Live console should reflect across both managers: a running one if any,
+    otherwise the most recently started. Keeps the single console honest when either the
+    production 30-feature capture or the experimental FTP detector was the last to run.
+    """
+    sessions = [m.session for m in _live_managers() if m.session is not None]
+    running = [s for s in sessions if s.running]
+    if running:
+        return running[0]
+    if sessions:
+        return max(sessions, key=lambda s: s.started_at)
+    return None
+
+
+def _manager_for(session):
+    """Which manager owns a given session (so stop() targets the right one)."""
+    if isinstance(session, ftp_live.FtpLiveCaptureSession):
+        return ftp_live.manager
+    return live_capture.manager
 
 
 def _base_context(active: str) -> dict:
@@ -56,7 +83,7 @@ def home(request):
     # Live-capture status -- reflects the actual CaptureManager, if any.
     try:
         capture_supported = live_capture.capture_supported()
-        live_session = live_capture.manager.session
+        live_session = _current_live_session()
         live_running = bool(live_session and live_session.running)
         live_snapshot = live_session.snapshot() if live_session else None
     except Exception:  # noqa: BLE001
@@ -248,8 +275,13 @@ def live(request):
     never affected.
     """
     context = _base_context("live")
+    # The live console can additionally run the experimental FTP-BruteForce behavioural
+    # detector (a validated candidate loaded from validation/models/, never the production
+    # registry). It is offered as an explicit, clearly-labelled extra model option.
+    models = list(context["models"]) + [ftp_live.available_model()]
     context.update(
         {
+            "models": models,
             "interfaces": live_capture.list_interfaces(),
             "capture_supported": live_capture.capture_supported(),
             "families": classes.legend(),
@@ -259,8 +291,10 @@ def live(request):
 
 
 def _resolve_model_key(raw: str | None) -> str:
-    """Same rule as the forms: fall back to the default, reject anything unknown."""
+    """Fall back to the default, accept the experimental FTP key, reject anything else."""
     key = (raw or "").strip() or ml.DEFAULT_MODEL
+    if key == ftp_live.CANDIDATE_KEY:
+        return key
     if key not in ml.MODEL_REGISTRY:
         raise ValueError("Unknown model.")
     return key
@@ -287,8 +321,14 @@ def api_live_start(request):
     except ValueError as exc:
         return JsonResponse({"error": str(exc)}, status=400)
 
+    # One capture at a time across both managers, so the single console stays coherent.
+    active = _current_live_session()
+    if active is not None and active.running:
+        return JsonResponse({"error": "A capture is already running. Stop it first."}, status=409)
+
+    manager = ftp_live.manager if model_key == ftp_live.CANDIDATE_KEY else live_capture.manager
     try:
-        session = live_capture.manager.start(iface, model_key)
+        session = manager.start(iface, model_key)
     except live_capture.CaptureError as exc:
         return JsonResponse({"error": str(exc)}, status=503)
 
@@ -298,9 +338,10 @@ def api_live_start(request):
 @require_http_methods(["POST"])
 def api_live_stop(request):
     """Stop the running capture, if any, and return its final snapshot."""
-    session = live_capture.manager.stop()
+    session = _current_live_session()
     if session is None:
         return JsonResponse({"running": False, "recent": []})
+    _manager_for(session).stop()
     return JsonResponse(session.snapshot())
 
 
@@ -310,7 +351,7 @@ def api_live_status(request):
     Poll endpoint. `?since=<seq>` returns only records newer than the client's
     highest seen sequence number, so the table can append rather than reload.
     """
-    session = live_capture.manager.session
+    session = _current_live_session()
     if session is None:
         return JsonResponse({"running": False, "recent": []})
 
