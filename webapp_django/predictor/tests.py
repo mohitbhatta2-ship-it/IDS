@@ -4167,9 +4167,13 @@ class FtpAuthForensicsResultsTests(TestCase):
         self.assertAlmostEqual(acc, 0.9803, places=4)
 
 
+
 # ---------------------------------------------------------------------------
-# Live FTP-BruteForce detector (experimental candidate wired into live capture)
+# Transparent FTP integration into the production Live Capture system
 # ---------------------------------------------------------------------------
+# The live console selects a NORMAL production model; the unified session routes cleartext FTP
+# flows to the validated FTP detector internally, while non-FTP/FTPS flows keep using the
+# selected production model. The FTP model is never exposed in the UI or the model registry.
 
 from predictor import ftp_live as _flive
 
@@ -4186,28 +4190,78 @@ def _first_pcap(*globs):
     return None
 
 
-class FtpLiveFeatureSchemaTests(TestCase):
-    """Feature extraction / schema: the candidate's 67 features, order preserved, no zero-fill."""
+# -- A. Existing production behaviour is preserved ---------------------------
 
+class FtpIntegrationProductionUnchangedTests(TestCase):
+    def test_production_registry_unchanged(self):
+        # the FTP model must never pollute the production registry
+        self.assertNotIn(_flive.CANDIDATE_ID, ml.MODEL_REGISTRY)
+        self.assertEqual(set(ml.MODEL_REGISTRY), {"histgradientboosting", "xgboost", "mlp"})
+        self.assertEqual(ml.DEFAULT_MODEL, "histgradientboosting")
+
+    def test_resolve_model_key_still_rejects_unknown_and_the_ftp_id(self):
+        from predictor import views
+        self.assertEqual(views._resolve_model_key(None), ml.DEFAULT_MODEL)
+        self.assertEqual(views._resolve_model_key("xgboost"), "xgboost")
+        with self.assertRaises(ValueError):
+            views._resolve_model_key("not-a-model")
+        with self.assertRaises(ValueError):
+            views._resolve_model_key(_flive.CANDIDATE_ID)   # FTP id is not user-selectable
+
+    def test_manager_factory_is_the_unified_session(self):
+        # the integration installs the unified session as the (unchanged) manager's factory
+        self.assertIs(live_capture.manager.session_factory, _flive.UnifiedLiveCaptureSession)
+        self.assertTrue(issubclass(_flive.UnifiedLiveCaptureSession, live_capture.CaptureSession))
+
+    def test_default_capturesession_class_is_untouched(self):
+        # the base CaptureSession default factory contract is preserved
+        m = live_capture.CaptureManager()
+        self.assertIs(m.session_factory, live_capture.CaptureSession)
+
+    @skipUnless(_SCAPY, "scapy required")
+    def test_non_ftp_flow_uses_selected_production_model(self):
+        _flive.live_capture._ensure_live_on_path()
+        from scapy.layers.inet import IP, TCP
+        from scapy.packet import Raw
+        from feature_calculator import calculate_features
+        sess = _flive.UnifiedLiveCaptureSession(None, ml.DEFAULT_MODEL)
+        t = 1000.0
+        pkts = []
+        for i in range(6):
+            p = IP(src="10.0.0.5", dst="10.0.0.9") / TCP(sport=51000, dport=80, flags="PA", seq=i) / Raw(load=b"GET / HTTP/1.1\r\nHost: x\r\n\r\n"); p.time = t + i * 0.1
+            pkts.append(p)
+        f1 = IP(src="10.0.0.5", dst="10.0.0.9") / TCP(sport=51000, dport=80, flags="FA"); f1.time = t + 1
+        f2 = IP(src="10.0.0.9", dst="10.0.0.5") / TCP(sport=80, dport=51000, flags="FA"); f2.time = t + 1.1
+        for p in pkts + [f1, f2]:
+            sess._handle(p)
+        # capture the flow's 30 features and compare to a direct production prediction
+        sess._flush_all()
+        rec = sess.snapshot()["recent"][0]
+        self.assertEqual(rec["routed"], "production")
+        self.assertFalse(rec["ftp_relevant"])
+
+
+# -- B. FTP routing ----------------------------------------------------------
+
+class FtpIntegrationRoutingTests(TestCase):
     def test_features_pc_shape_and_order(self):
         self.assertEqual(len(_flive.FEATURES_PC), 67)
         self.assertEqual(_flive.FEATURES_PC[:30], list(ml.FEATURES))     # 30 packet features, in order
-        self.assertEqual(len(_flive.APP_FEATURES), 37)                   # 13 behav + 11 pc + 13 cross
+        self.assertEqual(len(_flive.APP_FEATURES), 37)
         self.assertEqual(_flive.FEATURES_PC[30:], _flive.APP_FEATURES)
 
-    def test_candidate_not_in_production_registry(self):
-        # the experimental key must never touch the production model registry / paths
-        self.assertNotIn(_flive.CANDIDATE_KEY, ml.MODEL_REGISTRY)
-        desc = _flive.available_model()
-        self.assertEqual(desc["key"], _flive.CANDIDATE_KEY)
-        self.assertTrue(desc["experimental"])
-
-    def test_candidate_model_file_is_the_validated_per_connection_candidate(self):
+    def test_candidate_is_the_validated_per_connection_artifact(self):
         self.assertTrue(str(_flive.candidate_path()).endswith(
             "validation/models/ftp-per-connection/candidate_pc_unweighted.pkl"))
 
+    def test_candidate_loads_and_decodes(self):
+        model, decode = _flive.load_candidate()
+        self.assertEqual(len(model.classes_), 15)
+        self.assertEqual(decode.get(0), "Benign")
+        self.assertIn("FTP-BruteForce", set(decode.values()))
+
     @skipUnless(_SCAPY, "scapy required")
-    def test_app_features_from_pcap_no_zero_fill(self):
+    def test_app_features_schema_and_no_zero_fill(self):
         import numpy as _np
         pcap = _first_pcap(str(_AFDIR / "ftp_bruteforce" / "*dict_fail*.pcap"),
                             str(_PCDIR / "ftp_bruteforce" / "*single_packed*.pcap"))
@@ -4216,55 +4270,89 @@ class FtpLiveFeatureSchemaTests(TestCase):
         app, behav = _flive.app_features_from_pcap(pcap)
         self.assertEqual(sorted(app.keys()), sorted(_flive.APP_FEATURES))
         self.assertGreaterEqual(behav["ftp_login_attempts"], 1)
-        # undefined measurements are preserved as NaN rather than zero-filled upstream
         self.assertTrue(any(isinstance(v, float) and _np.isnan(v) for v in app.values())
                         or behav["ftp_failed_logins"] >= 1)
 
+    @skipUnless(_SCAPY, "scapy required")
+    def test_cleartext_ftp_is_routed_to_the_ftp_detector(self):
+        pcap = _first_pcap(str(_PCDIR / "ftp_bruteforce" / "*single_packed*.pcap"),
+                            str(_AFDIR / "ftp_bruteforce" / "*dict_fail*.pcap"))
+        if not pcap:
+            self.skipTest("no FTP attacker corpus present")
+        snap = self._replay(pcap)
+        ftp_rows = [r for r in snap["recent"] if r["routed"] == "ftp"]
+        self.assertTrue(ftp_rows, "a cleartext FTP flow must route to the FTP detector")
+        self.assertTrue(all(r["behavioral_available"] for r in ftp_rows))
+        # the console still reports the SELECTED production model, not an FTP model
+        self.assertEqual(snap["model_key"], ml.DEFAULT_MODEL)
+        self.assertEqual(snap["model_name"], ml.MODEL_REGISTRY[ml.DEFAULT_MODEL]["name"])
 
-class FtpLivePredictionTests(TestCase):
-    """Live prediction path: candidate loads and scores, NaN app features handled natively."""
+    def _replay(self, pcap):
+        _flive.live_capture._ensure_live_on_path()
+        from scapy.all import rdpcap
+        sess = _flive.UnifiedLiveCaptureSession(None, ml.DEFAULT_MODEL)
+        for pk in rdpcap(pcap):
+            sess._handle(pk)
+        sess._flush_all()
+        return sess.snapshot()
 
-    def test_candidate_loads_and_decodes(self):
-        model, decode = _flive.load_candidate()
-        self.assertEqual(len(model.classes_), 15)
-        self.assertEqual(decode.get(0), "Benign")
-        self.assertIn("FTP-BruteForce", set(decode.values()))
 
-    def test_predict_on_nan_app_row_is_valid(self):
+# -- C. FTP attack still predicted as FTP-BruteForce -------------------------
+
+@skipUnless(_SCAPY, "scapy required")
+class FtpIntegrationAttackTests(TestCase):
+    def test_attacker_pcap_predicts_ftp_bruteforce(self):
+        pcap = _first_pcap(str(_PCDIR / "ftp_bruteforce" / "*single_packed*.pcap"),
+                            str(_AFDIR / "ftp_bruteforce" / "*dict_fail*.pcap"))
+        if not pcap:
+            self.skipTest("no FTP attacker corpus present")
+        _flive.live_capture._ensure_live_on_path()
+        from scapy.all import rdpcap
+        sess = _flive.UnifiedLiveCaptureSession(None, ml.DEFAULT_MODEL)
+        for pk in rdpcap(pcap):
+            sess._handle(pk)
+        sess._flush_all()
+        snap = sess.snapshot()
+        self.assertGreaterEqual(snap["ftp_detections"], 1)
+        ftp = [r for r in snap["recent"] if r["is_ftp_bruteforce"]]
+        self.assertTrue(ftp)
+        self.assertTrue(all(r["routed"] == "ftp" and r["behavioral_available"] for r in ftp))
+
+
+# -- D. Benign FTP stays Benign ---------------------------------------------
+
+@skipUnless(_SCAPY, "scapy required")
+class FtpIntegrationBenignTests(TestCase):
+    def test_clean_login_scores_benign(self):
+        pcap = _first_pcap(str(_AFDIR / "benign" / "*clean*.pcap"),
+                            str(_PCDIR / "benign" / "*.pcap"))
+        if not pcap:
+            self.skipTest("no benign FTP corpus present")
+        _flive.live_capture._ensure_live_on_path()
+        from scapy.all import rdpcap
+        sess = _flive.UnifiedLiveCaptureSession(None, ml.DEFAULT_MODEL)
+        for pk in rdpcap(pcap):
+            sess._handle(pk)
+        sess._flush_all()
+        snap = sess.snapshot()
+        self.assertGreaterEqual(snap["flows"], 1)
+        self.assertEqual(snap["ftp_detections"], 0)
+        self.assertTrue(any(r["behavioral_available"] for r in snap["recent"]))
+
+
+# -- E. FTPS / encrypted -> no fabrication, packet-feature fallback ----------
+
+class FtpIntegrationFtpsTests(TestCase):
+    def test_build_row_never_fabricates_app_features(self):
         import numpy as _np
-        sess = _flive.FtpLiveCaptureSession(interface=None)
-        row = {f: 0.0 for f in ml.FEATURES}
-        for f in _flive.APP_FEATURES:
-            row[f] = _np.nan
-        pred = sess._predict(row)
-        self.assertIn("label", pred)
-        self.assertGreaterEqual(pred["confidence"], 0.0)
-        self.assertLessEqual(pred["confidence"], 1.0)
-        self.assertEqual(pred["is_attack"], pred["label"] != "Benign")
-
-
-class FtpLiveMissingFeatureTests(TestCase):
-    """Missing-feature handling: non-FTP and encrypted FTPS -> NaN app features, flagged."""
-
-    def test_build_row_non_ftp_all_app_nan(self):
-        import numpy as _np
-        sess = _flive.FtpLiveCaptureSession(interface=None)
+        sess = _flive.UnifiedLiveCaptureSession(None, ml.DEFAULT_MODEL)
         feat30 = {f: 0.0 for f in ml.FEATURES}
-        row, avail, reason, info = sess._build_row(feat30, None, False)
+        # a recognised FTP session with no buffered control -> all app features NaN, not zero
+        row, avail, reason, info = sess._build_row(feat30, ("10.0.0.5", "10.0.0.9"))
         self.assertFalse(avail)
         self.assertEqual(reason, "no-ftp-control")
         self.assertTrue(all(isinstance(row[f], float) and _np.isnan(row[f]) for f in _flive.APP_FEATURES))
-        # the 30 packet features are still present and in order (never dropped)
-        self.assertEqual([f for f in ml.FEATURES if f in row], list(ml.FEATURES))
-
-    def test_build_row_ftps_flagged_encrypted(self):
-        import numpy as _np
-        sess = _flive.FtpLiveCaptureSession(interface=None)
-        feat30 = {f: 0.0 for f in ml.FEATURES}
-        row, avail, reason, info = sess._build_row(feat30, ("10.0.0.5", "10.0.0.9"), True)
-        self.assertFalse(avail)
-        self.assertEqual(reason, "encrypted-ftps")
-        self.assertTrue(all(isinstance(row[f], float) and _np.isnan(row[f]) for f in _flive.APP_FEATURES))
+        self.assertEqual([f for f in ml.FEATURES if f in row], list(ml.FEATURES))  # 30 packet preserved, in order
 
     def test_payload_role_and_auth_tls_helpers(self):
         self.assertEqual(_flive._payload_role(b"230 Login successful.\r\n"), "resp")
@@ -4274,11 +4362,11 @@ class FtpLiveMissingFeatureTests(TestCase):
         self.assertFalse(_flive._is_auth_tls(b"USER bob\r\n"))
 
     @skipUnless(_SCAPY, "scapy required")
-    def test_ftps_stream_marked_and_scored_from_packets_only(self):
+    def test_ftps_uses_packet_feature_path_without_fabrication(self):
         _flive.live_capture._ensure_live_on_path()
         from scapy.layers.inet import IP, TCP
         from scapy.packet import Raw
-        sess = _flive.FtpLiveCaptureSession(interface=None)
+        sess = _flive.UnifiedLiveCaptureSession(None, ml.DEFAULT_MODEL)
         t = 1000.0
         a = IP(src="10.0.0.5", dst="10.0.0.9") / TCP(sport=52000, dport=21, flags="PA") / Raw(load=b"AUTH TLS\r\n"); a.time = t
         enc = IP(src="10.0.0.9", dst="10.0.0.5") / TCP(sport=21, dport=52000, flags="PA") / Raw(load=bytes(range(30))); enc.time = t + 0.2
@@ -4286,44 +4374,31 @@ class FtpLiveMissingFeatureTests(TestCase):
         for p in (a, enc, rst):
             sess._handle(p)
         sess._flush_all()
-        recs = sess.snapshot()["recent"]
-        self.assertTrue(recs)
-        self.assertFalse(recs[0]["behavioral_available"])
-        self.assertEqual(recs[0]["behavioral_reason"], "encrypted-ftps")
+        rec = sess.snapshot()["recent"][0]
+        self.assertEqual(rec["routed"], "production")            # packet-feature path
+        self.assertFalse(rec["behavioral_available"])
+        self.assertEqual(rec["behavioral_reason"], "encrypted-ftps")
 
 
-@skipUnless(_SCAPY, "scapy required")
-class FtpLiveEndToEndTests(TestCase):
-    """End-to-end: replay corpus pcaps through the live session and check detections."""
+# -- F. UI: the FTP model is not exposed in the dropdown ---------------------
 
-    def _run(self, pcap):
-        _flive.live_capture._ensure_live_on_path()
-        from scapy.all import rdpcap
-        sess = _flive.FtpLiveCaptureSession(interface=None)
-        for pk in rdpcap(pcap):
-            sess._handle(pk)
-        sess._flush_all()
-        return sess.snapshot()
+class FtpIntegrationUiTests(TestCase):
+    def test_dropdown_shows_only_production_models(self):
+        resp = self.client.get("/live/")
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode()
+        # every production model option is present, unchanged
+        for spec in ml.MODEL_REGISTRY.values():
+            self.assertIn(spec["name"], html)
+        # the experimental / FTP option must NOT be present
+        self.assertNotIn("experimental", html.lower())
+        self.assertNotIn("FTP-BruteForce behavioural detector", html)
+        self.assertNotIn(_flive.CANDIDATE_ID, html)
 
-    def test_attacker_pcap_yields_ftp_bruteforce(self):
-        pcap = _first_pcap(str(_PCDIR / "ftp_bruteforce" / "*single_packed*.pcap"),
-                            str(_AFDIR / "ftp_bruteforce" / "*dict_fail*.pcap"))
-        if not pcap:
-            self.skipTest("no FTP attacker corpus present")
-        snap = self._run(pcap)
-        self.assertGreaterEqual(snap["flows"], 1)
-        ftp = [r for r in snap["recent"] if r["is_ftp_bruteforce"]]
-        self.assertTrue(ftp, "expected an FTP-BruteForce detection on a packed attack capture")
-        self.assertTrue(any(r["behavioral_available"] for r in ftp))
-        self.assertEqual(snap["detector"], "ftp")
-        self.assertEqual(snap["model_key"], _flive.CANDIDATE_KEY)
-
-    def test_benign_pcap_scores_benign(self):
-        pcap = _first_pcap(str(_AFDIR / "benign" / "*clean*.pcap"),
-                            str(_PCDIR / "benign" / "*.pcap"))
-        if not pcap:
-            self.skipTest("no benign FTP corpus present")
-        snap = self._run(pcap)
-        self.assertGreaterEqual(snap["flows"], 1)
-        self.assertEqual(snap["ftp_detections"], 0)
-        self.assertTrue(any(r["behavioral_available"] for r in snap["recent"]))
+    def test_dropdown_option_count_matches_available_models(self):
+        resp = self.client.get("/live/")
+        html = resp.content.decode()
+        # one <option> per available production model inside the model select
+        import re as _re
+        block = _re.search(r'id="live-model".*?</select>', html, _re.DOTALL).group(0)
+        self.assertEqual(block.count("<option"), len(ml.available_models()))

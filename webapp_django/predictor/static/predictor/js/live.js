@@ -69,21 +69,22 @@
     });
   }
 
-  var ftpMode = false;
-
-  function ftpCells(rec) {
-    // Extra columns for the FTP detector: behavioural availability and session summary.
-    if (!ftpMode) return "";
-    var avail = rec.behavioral_available
-      ? '<span class="pill" title="cleartext FTP control features used">available</span>'
-      : '<span class="pill" title="' + esc(rec.behavioral_reason || "") + '">' +
-        (rec.behavioral_reason === "encrypted-ftps" ? "FTPS (encrypted)" : "n/a") + "</span>";
+  function ftpNote(rec) {
+    // For FTP-relevant flows only, a subtle second line under the prediction: whether the FTP
+    // behavioural features were available (cleartext) or not (encrypted FTPS), plus the login
+    // attempt summary. Non-FTP flows show nothing extra, so the table reads as one NIDS.
+    if (!rec || !rec.ftp_relevant) return "";
     var s = rec.session || {};
-    var sess = (s.login_attempts != null)
-      ? esc(s.login_attempts) + " attempt(s), " + esc(s.failed_logins || 0) + " failed, " +
-        esc(s.control_connections || 0) + " conn"
-      : "—";
-    return "<td>" + avail + "</td><td>" + sess + "</td>";
+    var bits = [];
+    if (rec.behavioral_available && s.login_attempts != null) {
+      bits.push("FTP · " + esc(s.login_attempts) + " attempt(s), " +
+                esc(s.failed_logins || 0) + " failed, " + esc(s.control_connections || 0) + " conn");
+    } else if (rec.behavioral_reason === "encrypted-ftps") {
+      bits.push("FTPS (encrypted) · behavioural features unavailable — packet features only");
+    } else {
+      bits.push("FTP · behavioural features unavailable");
+    }
+    return '<div class="table-note" style="margin-top:.2rem;">' + bits.join("") + "</div>";
   }
 
   function rowFor(rec) {
@@ -93,7 +94,8 @@
     var pct = (rec.confidence * 100).toFixed(1) + "%";
     var verdict =
       '<span class="live-dot" style="background: var(--fam);"></span>' +
-      '<span class="live-verdict">' + esc(rec.label) + "</span>";
+      '<span class="live-verdict">' + esc(rec.label) + "</span>" +
+      ftpNote(rec);
 
     tr.innerHTML =
       "<td>" + esc(clockFromISO(rec.at)) + "</td>" +
@@ -102,15 +104,8 @@
       "<td>" + esc(rec.protocol) + "</td>" +
       '<td class="num">' + esc(rec.packets) + "</td>" +
       "<td>" + verdict + "</td>" +
-      '<td class="num">' + pct + "</td>" +
-      ftpCells(rec);
+      '<td class="num">' + pct + "</td>";
     return tr;
-  }
-
-  function setFtpMode(on) {
-    if (ftpMode === on) return;
-    ftpMode = on;
-    document.querySelectorAll("[data-ftp-only]").forEach(function (el) { el.hidden = !on; });
   }
 
   function appendRecords(records) {
@@ -128,11 +123,9 @@
   }
 
   function applyStatus(data) {
-    setFtpMode(data.detector === "ftp");
     setMetric("packets", data.packets || 0);
     setMetric("flows", data.flows || 0);
     setMetric("attacks", data.attacks || 0);
-    setMetric("ftp", data.ftp_detections || 0);
     setMetric("open", data.open_flows || 0);
     appendRecords(data.recent);
     showError(data.error || null);

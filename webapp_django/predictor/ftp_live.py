@@ -1,30 +1,35 @@
 """
-Experimental LIVE FTP-BruteForce detector (candidate model only; production untouched).
+Transparent internal FTP specialisation for the production Live Capture system.
 
-This wires the validated **per-connection + cross-session** FTP candidate
-(``validation/models/ftp-per-connection/candidate_pc_unweighted.pkl``, 67 features) into the
-live-capture pipeline, so real FTP traffic off an interface can be classified as
-FTP-BruteForce vs Benign with the behavioural signal the production 30-feature model does not
-have. It reuses the *verified* live core for the 30 packet-flow features
-(``feature_calculator.calculate_features``, exactly as ``live_capture`` and ``pcap_validation``
-do) and the *frozen, validated* FTP extractors for the application-layer features
-(``ftp_behavioral`` / ``ftp_per_connection`` / ``ftp_cross_session``). Nothing here retrains,
-and nothing writes to ``webapp_data/Results/Models/`` -- the production models and
-``ml.py`` / ``live_capture.py`` are not modified.
+The live console selects a normal **production** model, exactly as before. This module makes
+FTP detection automatic and invisible to the user: the single live-capture session routes each
+finished flow to the appropriate feature/model pipeline internally --
 
-Pipeline (per the brief):
+    * non-FTP traffic          -> the user-selected production model (30 packet features),
+                                  byte-for-byte the existing behaviour (``ml.predict_one``);
+    * cleartext FTP traffic    -> the validated FTP per-connection detector
+                                  (``validation/models/ftp-per-connection/candidate_pc_unweighted.pkl``,
+                                  67 features = the same 30 packet features, in the same order,
+                                  plus the frozen behavioural / per-connection / cross-session
+                                  features);
+    * FTPS / encrypted FTP     -> the production packet-feature path, with behavioural features
+                                  left UNAVAILABLE and never fabricated / zero-filled.
 
-    packet capture -> flow building -> FTP behavioural extraction -> per-connection features
-    -> preprocessing -> candidate model -> prediction
+The routing layer only *chooses the pipeline*; it never decides "attack". Every label comes
+from a model's ``predict_proba`` -- the production model for non-FTP/FTPS, the FTP candidate
+for cleartext FTP. No heuristics, thresholds or hard-coded attack rules are added.
 
-The 30 packet features and their order are preserved (they are the first 30 columns of the
-candidate's 67). Application-layer features are computed only from cleartext FTP control
-traffic actually seen on the wire; when they are unavailable -- a non-FTP flow, or an
-encrypted **FTPS** control channel -- they are left **NaN (never zero-filled)** and the record
-is flagged ``behavioral_available: false`` with a reason, and the event is logged. The
-candidate (a HistGradientBoosting model) consumes NaN natively, so the flow is still scored
-from its packet features alone rather than on fabricated values. No heuristics, thresholds or
-hard-coded attack rules are applied -- the label comes only from the model.
+Nothing here retrains or writes to ``webapp_data/Results/Models/``. The FTP candidate is loaded
+from the repo's ``validation/models/…`` artifact through a private cache; the production
+``ml.MODEL_REGISTRY`` and ``ml._cache`` are untouched (the FTP model is NOT registered there,
+so it can never be selected as a normal model). The 30 packet features and their order are
+preserved (they are the first 30 columns of the candidate's 67). The verified ``Live/`` core
+computes those 30 features exactly as ``live_capture`` and ``pcap_validation`` do.
+
+Integration mechanism: this module installs :class:`UnifiedLiveCaptureSession` as
+``live_capture.manager.session_factory`` (a backward-compatible hook), so the existing
+``live_capture.manager`` -- and therefore the existing views, endpoints and dashboard --
+transparently gain FTP specialisation without any UI or API change.
 """
 
 from __future__ import annotations
@@ -40,15 +45,13 @@ import numpy as np
 import pandas as pd
 
 from . import ml, live_capture, classes, retraining as rt, retraining_per_connection as rpc, \
-    ftp_behavioral as fb, ftp_per_connection as fpc, ftp_cross_session as fcs, pcap_validation as pv
+    ftp_behavioral as fb, ftp_per_connection as fpc, ftp_cross_session as fcs  # noqa: F401
 
 logger = logging.getLogger("predictor.ftp_live")
 
-# Explicit, non-production model selection. This key is deliberately NOT registered in
-# ml.MODEL_REGISTRY, so the production prediction paths and the production model files are
-# entirely unaffected; only the live console routes it here.
-CANDIDATE_KEY = "ftp_pc_candidate"
-CANDIDATE_NAME = "FTP-BruteForce behavioural detector (experimental)"
+# Internal-only identifier for the FTP candidate. It is deliberately NOT a key in
+# ml.MODEL_REGISTRY and is never shown in the model dropdown -- FTP routing is automatic.
+CANDIDATE_ID = "ftp_pc_candidate"
 CANDIDATE_REL = "validation/models/ftp-per-connection/candidate_pc_unweighted.pkl"
 
 FEATURES_PC: list[str] = list(rpc.FEATURES_PC)     # 67 = 30 packet + 13 behav + 11 pc + 13 cross
@@ -75,7 +78,7 @@ _cache_lock = threading.Lock()
 
 
 # ---------------------------------------------------------------------------
-# Candidate model (loaded separately from ml._cache; production cache untouched)
+# FTP candidate model (loaded separately from ml._cache; production cache untouched)
 # ---------------------------------------------------------------------------
 
 def candidate_path() -> Path:
@@ -83,7 +86,7 @@ def candidate_path() -> Path:
 
 
 def load_candidate():
-    """Load and cache the experimental candidate and its encoded->name decoder."""
+    """Load and cache the validated FTP candidate and its encoded->name decoder."""
     with _cache_lock:
         if "model" in _cache:
             return _cache["model"], _cache["decode"]
@@ -91,27 +94,13 @@ def load_candidate():
         path = candidate_path()
         if not path.is_file():
             raise live_capture.CaptureError(
-                f"Experimental FTP candidate model is missing: {path}. It is a validation "
+                f"Validated FTP candidate model is missing: {path}. It is a validation "
                 "artifact stored in the repo under validation/models/ftp-per-connection/."
             )
         model = joblib.load(path)
         _cache["model"] = model
         _cache["decode"] = rt._encoded_to_name()
         return model, _cache["decode"]
-
-
-def available_model() -> dict:
-    """UI descriptor for the live console dropdown (never added to ml.MODEL_REGISTRY)."""
-    return {
-        "key": CANDIDATE_KEY,
-        "name": CANDIDATE_NAME,
-        "experimental": True,
-        "present": candidate_path().is_file(),
-        "n_features": len(FEATURES_PC),
-        "macro_f1": None,
-        "blurb": "Validated per-connection + cross-session FTP candidate. Adds cleartext FTP "
-                 "behavioural features; encrypted FTPS is flagged as unavailable.",
-    }
 
 
 # ---------------------------------------------------------------------------
@@ -159,62 +148,52 @@ def app_features_from_pcap(pcap_path):
 
 
 # ---------------------------------------------------------------------------
-# Live capture session (subclass of the verified core; only FTP bits added)
+# Unified live capture session (subclass of the verified core; routing added)
 # ---------------------------------------------------------------------------
 
-class FtpLiveCaptureSession(live_capture.CaptureSession):
+class UnifiedLiveCaptureSession(live_capture.CaptureSession):
     """
-    A live-capture session that classifies each finished flow with the FTP candidate,
-    augmenting the 30 packet features with cleartext-FTP behavioural / per-connection /
-    cross-session features when they are available on the wire.
+    The production live-capture session with transparent internal FTP specialisation.
+
+    A single session runs the user-selected production ``model_key``. Each finished flow is
+    routed by *protocol/session identification*: non-FTP and FTPS flows are scored by the
+    production model exactly as before; cleartext FTP flows are scored by the validated FTP
+    candidate over the 67-feature vector (30 packet + behavioural + per-connection +
+    cross-session). The label always comes from a model prediction, never from the router.
     """
 
-    def __init__(self, interface: str | None, model_key: str = CANDIDATE_KEY):
-        super().__init__(interface, CANDIDATE_KEY)
+    def __init__(self, interface: str | None, model_key: str = ml.DEFAULT_MODEL):
+        super().__init__(interface, model_key)     # model_key is a REAL production registry key
         # stream_key -> {"session": (client_ip, server_ip), "ftps": bool}
         self._ftp_streams: dict = {}
         # session_key (client_ip, server_ip) -> {"pkts": deque, "last": float}
         self._ftp_sessions: dict = {}
         self._ftp_lock = threading.Lock()
-        self.ftp_detections = 0
-        self.behavioral_unavailable = 0
+        self._ftp_enabled = True          # downgraded in _run if the candidate cannot load
+        self.ftp_flows = 0                # flows routed to (or recognised as) FTP
+        self.ftp_detections = 0           # flows the FTP model called FTP-BruteForce
+        self.behavioral_unavailable = 0   # FTP-relevant flows scored without behavioural features
 
-    # -- capture thread: warm the CANDIDATE (not a production registry key) ----
+    # -- capture thread: warm BOTH the production model and the FTP candidate --
 
     def _run(self) -> None:
-        from scapy.all import sniff
-
+        # Warm the FTP candidate up-front so cleartext FTP flows do not pay the unpickling
+        # cost mid-sweep. If it is unavailable, degrade gracefully to production-only routing
+        # (still a fully working NIDS) rather than failing the capture.
         try:
             load_candidate()
+            self._ftp_enabled = True
         except Exception as exc:  # noqa: BLE001
-            self.error = f"Candidate model could not be loaded: {exc}"
-            return
-
-        try:
-            sniff(
-                iface=self.interface,
-                prn=self._handle,
-                store=False,
-                stop_filter=lambda _pkt: self._stop.is_set(),
-            )
-        except PermissionError:
-            self.error = (
-                "Permission denied opening the interface. Live capture needs root / "
-                "CAP_NET_RAW (e.g. run the server with sudo, or grant the capability)."
-            )
-        except OSError as exc:
-            self.error = f"Capture failed: {exc}"
-        except Exception as exc:  # noqa: BLE001
-            self.error = f"Capture stopped unexpectedly: {exc}"
-        finally:
-            self._flush_all()
-            self.stopped_at = datetime.now(timezone.utc)
+            self._ftp_enabled = False
+            logger.warning(
+                "FTP detector unavailable; production model handles all flows: %s", exc)
+        # The parent warms the production model (self.model_key) and runs the sniff loop,
+        # driving our overridden _handle / _classify.
+        super()._run()
 
     # -- packet handling: buffer FTP control traffic, then run the flow core ---
 
     def _handle(self, pkt) -> None:
-        # Buffer FTP control packets BEFORE the flow core may finalize this flow, so the
-        # session buffer already contains this packet when _classify runs.
         try:
             self._buffer_ftp(pkt)
         except Exception:  # noqa: BLE001 - buffering must never break capture
@@ -272,7 +251,7 @@ class FtpLiveCaptureSession(live_capture.CaptureSession):
             return None, False
         return known["session"], bool(known.get("ftps"))
 
-    # -- classification: candidate model over 67 features, no zero-fill --------
+    # -- classification: route to production or FTP model (never a rule) -------
 
     def _classify(self, flow) -> None:
         from feature_calculator import calculate_features
@@ -284,13 +263,41 @@ class FtpLiveCaptureSession(live_capture.CaptureSession):
             return
 
         session_key, is_ftps = self._session_for_flow(flow)
-        row, behavioral_available, reason, session_info = self._build_row(feat30, session_key, is_ftps)
 
-        try:
-            pred = self._predict(row)
-        except Exception as exc:  # noqa: BLE001
-            self.error = f"Classification error: {exc}"
-            return
+        routed = "production"
+        ftp_relevant = False
+        behavioral_available = False
+        reason = None
+        session_info: dict = {}
+
+        if is_ftps:
+            # FTPS: behavioural features are unavailable (encrypted) and must NOT be
+            # fabricated. Score with the production packet-feature path.
+            ftp_relevant = True
+            reason = "encrypted-ftps"
+            logger.info(
+                "FTP behavioural features unavailable (encrypted FTPS control channel) for "
+                "session %s; scoring with the production model on packet features.", session_key)
+            pred = self._predict_production(feat30)
+        elif self._ftp_enabled and session_key is not None:
+            # A recognised cleartext FTP session: try the behavioural pipeline.
+            row, avail, r, info = self._build_row(feat30, session_key)
+            if avail:
+                routed = "ftp"
+                ftp_relevant = True
+                behavioral_available = True
+                reason = "ok"
+                session_info = info
+                pred = self._predict_candidate(row)
+            else:
+                # Recognised as FTP but no usable cleartext control yet (e.g. a data
+                # connection): fall back to the production model, no fabrication.
+                ftp_relevant = True
+                reason = r
+                pred = self._predict_production(feat30)
+        else:
+            # Ordinary non-FTP traffic: unchanged production behaviour.
+            pred = self._predict_production(feat30)
 
         proto = live_capture._PROTO_NAMES.get(flow.protocol, str(flow.protocol))
         record = {
@@ -300,7 +307,9 @@ class FtpLiveCaptureSession(live_capture.CaptureSession):
             "duration_us": feat30.get("Flow Duration", 0.0),
             "label": pred["label"], "confidence": pred["confidence"],
             "is_attack": pred["is_attack"], "family": pred["family"],
-            "family_name": pred["family_name"], "top": pred["top"],
+            "family_name": pred["family_name"], "top": pred.get("top", []),
+            "routed": routed,
+            "ftp_relevant": ftp_relevant,
             "is_ftp_bruteforce": pred["label"] == FTP_LABEL,
             "behavioral_available": behavioral_available,
             "behavioral_reason": reason,
@@ -314,53 +323,42 @@ class FtpLiveCaptureSession(live_capture.CaptureSession):
             self.classified += 1
             if pred["is_attack"]:
                 self.attacks += 1
+            if ftp_relevant:
+                self.ftp_flows += 1
+                if not behavioral_available:
+                    self.behavioral_unavailable += 1
             if record["is_ftp_bruteforce"]:
                 self.ftp_detections += 1
-            if not behavioral_available:
-                self.behavioral_unavailable += 1
             self._recent.appendleft(record)
 
-    def _build_row(self, feat30: dict, session_key, is_ftps: bool):
+    def _predict_production(self, feat30: dict) -> dict:
+        """The existing production path -- byte-for-byte the pre-integration behaviour."""
+        return ml.predict_one(feat30, self.model_key)
+
+    def _build_row(self, feat30: dict, session_key):
         """
-        Assemble the 67-feature row. The 30 packet features come from the flow (real values,
-        order preserved); the 37 application-layer features default to NaN and are only filled
-        from cleartext FTP control traffic actually captured. Never zero-filled.
+        Assemble the 67-feature row for a cleartext FTP session. The 30 packet features come
+        from the flow (real values, order preserved); the 37 application-layer features default
+        to NaN and are only filled from cleartext FTP control traffic actually captured. Never
+        zero-filled. Returns ``(row, behavioral_available, reason, session_info)``.
         """
         row = {f: float(feat30.get(f, np.nan)) for f in ml.FEATURES}  # 30 packet, in order
         for f in APP_FEATURES:
             row[f] = np.nan  # unavailable until proven otherwise
-
-        behavioral_available = False
-        reason = "no-ftp-control"
-        session_info: dict = {}
-
-        if is_ftps:
-            reason = "encrypted-ftps"
-            logger.info(
-                "FTP behavioural features unavailable (encrypted FTPS control channel) for "
-                "session %s; scoring from packet features only.", session_key,
-            )
-            return row, behavioral_available, reason, session_info
-
-        if session_key is None:
-            return row, behavioral_available, reason, session_info
 
         with self._ftp_lock:
             sess = self._ftp_sessions.get(session_key)
             pkts = list(sess["pkts"]) if sess else []
 
         if not pkts:
-            return row, behavioral_available, reason, session_info
+            return row, False, "no-ftp-control", {}
 
         appfeat, behav = self._extract_app_features(pkts)
         if appfeat is None or not fb.has_ftp_control(behav):
-            reason = "no-ftp-control"
-            return row, behavioral_available, reason, session_info
+            return row, False, "no-ftp-control", {}
 
         for f in APP_FEATURES:
             row[f] = appfeat[f]  # may be NaN (a genuinely undefined measurement)
-        behavioral_available = True
-        reason = "ok"
         session_info = {
             "client_ip": session_key[0], "server_ip": session_key[1],
             "control_connections": int(behav.get("ftp_control_connections", 0)),
@@ -368,7 +366,7 @@ class FtpLiveCaptureSession(live_capture.CaptureSession):
             "failed_logins": int(behav.get("ftp_failed_logins", 0)),
             "successful_logins": int(behav.get("ftp_successful_logins", 0)),
         }
-        return row, behavioral_available, reason, session_info
+        return row, True, "ok", session_info
 
     def _extract_app_features(self, pkts):
         """Write buffered packets to a temp pcap and run the frozen FTP extractors on it."""
@@ -392,7 +390,7 @@ class FtpLiveCaptureSession(live_capture.CaptureSession):
                 except OSError:
                     pass
 
-    def _predict(self, row: dict) -> dict:
+    def _predict_candidate(self, row: dict) -> dict:
         model, decode = load_candidate()
         # Preserve NaN: build the frame directly from the row (no .get(f, 0.0) fill).
         frame = pd.DataFrame([row])[FEATURES_PC]
@@ -416,7 +414,7 @@ class FtpLiveCaptureSession(live_capture.CaptureSession):
             "top": top,
         }
 
-    # -- status snapshot (adds the FTP-specific fields) ------------------------
+    # -- status snapshot: production model identity + FTP routing counters -----
 
     def snapshot(self, since: int = 0) -> dict:
         with self._lock:
@@ -424,12 +422,12 @@ class FtpLiveCaptureSession(live_capture.CaptureSession):
             return {
                 "running": self.running,
                 "interface": self.interface or "auto",
-                "model_key": CANDIDATE_KEY,
-                "model_name": CANDIDATE_NAME,
-                "detector": "ftp",
+                "model_key": self.model_key,
+                "model_name": ml.MODEL_REGISTRY.get(self.model_key, {}).get("name", self.model_key),
                 "packets": self.packets,
                 "flows": self.classified,
                 "attacks": self.attacks,
+                "ftp_flows": self.ftp_flows,
                 "ftp_detections": self.ftp_detections,
                 "behavioral_unavailable": self.behavioral_unavailable,
                 "open_flows": len(self._flows),
@@ -441,17 +439,21 @@ class FtpLiveCaptureSession(live_capture.CaptureSession):
             }
 
 
-class FtpCaptureManager(live_capture.CaptureManager):
-    """Process-wide holder for the single active FTP live-capture session."""
-
-    def start(self, interface: str | None, model_key: str = CANDIDATE_KEY) -> FtpLiveCaptureSession:
-        with self._lock:
-            if self._session is not None and self._session.running:
-                raise live_capture.CaptureError("A capture is already running. Stop it first.")
-            session = FtpLiveCaptureSession(interface, CANDIDATE_KEY)
-            session.start()
-            self._session = session
-            return session
+# Backward-compatible alias.
+FtpLiveCaptureSession = UnifiedLiveCaptureSession
 
 
-manager = FtpCaptureManager()
+def install(manager: "live_capture.CaptureManager | None" = None) -> None:
+    """
+    Install the unified session as a capture manager's factory so the existing live console
+    transparently gains FTP specialisation. Idempotent; defaults to the process-wide
+    ``live_capture.manager``. Backward-compatible: the production 30-feature path is unchanged
+    for non-FTP/FTPS flows.
+    """
+    mgr = manager if manager is not None else live_capture.manager
+    mgr.session_factory = UnifiedLiveCaptureSession
+
+
+# Install on import so any code path that reaches the live console (views, dashboard) uses the
+# unified session. Non-FTP behaviour is identical to before; only FTP flows are specialised.
+install()

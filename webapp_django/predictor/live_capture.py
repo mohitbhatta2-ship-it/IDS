@@ -406,12 +406,17 @@ class CaptureManager:
     def __init__(self):
         self._lock = threading.Lock()
         self._session: CaptureSession | None = None
+        # The session class this manager instantiates. Defaults to the plain CaptureSession,
+        # so behaviour is unchanged; an integration layer may set it to a CaptureSession
+        # subclass to add transparent internal routing (see predictor.ftp_live). Backward-
+        # compatible: existing callers and tests that use CaptureSession keep working.
+        self.session_factory = CaptureSession
 
     def start(self, interface: str | None, model_key: str) -> CaptureSession:
         with self._lock:
             if self._session is not None and self._session.running:
                 raise CaptureError("A capture is already running. Stop it first.")
-            session = CaptureSession(interface, model_key)
+            session = self.session_factory(interface, model_key)
             session.start()   # may raise CaptureError (no scapy) before we store it
             self._session = session
             return session
