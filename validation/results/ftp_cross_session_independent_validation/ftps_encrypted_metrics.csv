@@ -1,0 +1,6 @@
+model,n,ftp_recall,benign_recall
+production,7,0.0,1.0
+candidate2,7,0.0,1.0
+C1_current_45,7,0.0,1.0
+C3_controlled_43,7,0.0,1.0
+cross_session_58,7,0.0,1.0

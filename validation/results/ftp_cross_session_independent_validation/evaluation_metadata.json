@@ -1,0 +1,19 @@
+{
+  "experiment": "ftp_cross_session_independent_validation",
+  "created_utc": "2026-08-17T08:32:49.375226+00:00",
+  "corpus": "validation/independent_ftp_validation2_pcaps",
+  "server": "pure-ftpd",
+  "client_new": "ncftp",
+  "network": "veth + ip netns 10.88.0.0/24",
+  "evaluated_models": [
+    "production",
+    "candidate2",
+    "C1_current_45",
+    "C3_controlled_43",
+    "cross_session_58"
+  ],
+  "test_only": true,
+  "versions": {
+    "python": "3.11.15"
+  }
+}

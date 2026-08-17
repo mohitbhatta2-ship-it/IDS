@@ -1,0 +1,4 @@
+client,n_flows,ftp_recall,benign_recall
+curl,7,0.0,1.0
+ncftp,33,,1.0
+raw-socket,51,0.8605,1.0

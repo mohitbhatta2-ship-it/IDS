@@ -37,7 +37,8 @@ def candidate_dir() -> Path:
 def _dmap():
     return {"v1": "realistic_pcaps", "v2": "realistic_pcaps_v2", "targeted": "targeted_benign_pcaps",
             "robust_train": "robust_train_pcaps", "benign_failed_login": "benign_failed_login_pcaps",
-            "cross_session": "cross_session_pcaps", "independent_ftp_val": "independent_ftp_validation_pcaps"}
+            "cross_session": "cross_session_pcaps", "independent_ftp_val": "independent_ftp_validation_pcaps",
+            "independent_ftp_val2": "independent_ftp_validation2_pcaps"}
 
 
 def _extract_dir(root: Path, source: str, rows: list, invalid: list):

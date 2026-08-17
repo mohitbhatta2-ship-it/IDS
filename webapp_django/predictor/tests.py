@@ -3703,3 +3703,115 @@ class FtpCrossSessionResultsTests(TestCase):
         model, _ = ml._load("histgradientboosting")
         acc = float((model.predict(test[ml.FEATURES]) == test["Label"]).mean())
         self.assertAlmostEqual(acc, 0.9803, places=4)
+
+
+# ---------------------------------------------------------------------------
+# Second independent validation of the cross-session detector (pure-ftpd/ncftp)
+# ---------------------------------------------------------------------------
+
+from predictor import independent_ftp_lab2 as _ivl2
+
+_IV2_DIR = _P2(__file__).resolve().parents[2] / "validation" / "independent_ftp_validation2_pcaps"
+_HAS_IV2 = (_IV2_DIR / "MANIFEST.csv").is_file()
+_IV2_RESULTS = _P2(__file__).resolve().parents[2] / "validation" / "results" / "ftp_cross_session_independent_validation"
+_HAS_IV2_RESULTS = (_IV2_RESULTS / "final_verdict.json").is_file()
+
+
+class IndependentFtpLab2Tests(TestCase):
+    def test_private_non_loopback_new_subnet(self):
+        self.assertTrue(_ivl2.is_private_lab(_ivl2.SERVER_ADDR))
+        self.assertTrue(_ivl2.SERVER_ADDR.startswith("10.88."))     # new subnet, not 10.77.x or 127.x
+        self.assertFalse(_ivl2.SERVER_ADDR.startswith("127."))
+
+    def test_new_ports_and_refuse_external(self):
+        self.assertEqual({_ivl2.PORT_PLAIN, _ivl2.PORT_TLS}, {2222, 2323})
+        self.assertFalse(_ivl2.is_private_lab("8.8.8.8"))
+        self.assertFalse(_ivl2.is_private_lab("10.77.0.2"))          # first-test subnet is not this lab
+
+    def test_specs_cover_single_and_multi_session_structure(self):
+        structs = {s.structure for s in _ivl2.specs(tls_ok=True)}
+        self.assertIn("single_session", structs)
+        self.assertIn("multi_session", structs)
+        fams = {s.family for s in _ivl2.specs(tls_ok=True)}
+        for f in ("single_session_brute", "multi_session_brute", "mistype", "gave_up", "eventual_success"):
+            self.assertIn(f, fams)
+
+
+@skipUnless(_HAS_IV2, "second independent corpus not present")
+class IndependentFtp2CorpusTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        with (_IV2_DIR / "MANIFEST.csv").open() as f:
+            cls.rows = list(csv.DictReader(f))
+        cls.base = _P2(__file__).resolve().parents[2] / "validation"
+
+    def test_disjoint_from_all_prior_incl_first_independent_and_cross_session(self):
+        new = _pcap_sha_set(_IV2_DIR)
+        for other in ("realistic_pcaps", "realistic_pcaps_v2", "independent_real_pcaps",
+                      "targeted_benign_pcaps", "robustness_pcaps", "robust_train_pcaps",
+                      "benign_failed_login_pcaps", "cross_session_pcaps", "independent_ftp_validation_pcaps"):
+            self.assertTrue(new.isdisjoint(_pcap_sha_set(self.base / other)), other)
+
+    def test_labels_from_folders_and_valid(self):
+        for r in self.rows:
+            folder = "benign" if r["label"] == "Benign" else "ftp_bruteforce"
+            self.assertTrue(list((_IV2_DIR / folder).glob(f"{r['capture_id']}_*.pcap")))
+            self.assertEqual(r["verification_status"], "valid", r["capture_id"])
+
+    def test_has_single_session_attacks(self):
+        ss_atk = [r for r in self.rows if r["label"] == "FTP-BruteForce" and r["session_structure"] == "single_session"]
+        self.assertTrue(ss_atk)     # the decisive stress case must be present
+
+    def test_captured_on_new_non_loopback_interface(self):
+        for r in self.rows:
+            self.assertEqual(r["interface"], _ivl2.VETH_H)
+            self.assertNotEqual(r["interface"], "lo")
+
+
+@skipUnless(_HAS_IV2_RESULTS, "committed 2nd-validation results not present")
+class CrossSessionIndependentValidationResultsTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.verdict = json.loads((_IV2_RESULTS / "final_verdict.json").read_text())
+        cls.hashes = json.loads((_IV2_RESULTS / "model_hashes_before_after.json").read_text())
+        cls.leak = json.loads((_IV2_RESULTS / "leakage_validation.json").read_text())
+
+    def test_verdict_is_one_of_the_four_and_not_promoted(self):
+        self.assertIn(self.verdict["verdict"], (
+            "PROMISING -- TARGET MET", "PROMISING -- NEEDS MORE DATA", "NOT EFFECTIVE",
+            "INVALID -- LEAKAGE/INTEGRITY FAILURE"))
+        self.assertFalse(self.verdict["promote"])
+
+    def test_frozen_unchanged(self):
+        self.assertTrue(self.hashes["unchanged"])
+        self.assertEqual(self.hashes["before"], self.hashes["after"])
+
+    def test_leakage_and_feature_integrity(self):
+        c = self.leak["checks"]
+        for k in ("disjoint_from_cross_session", "disjoint_from_indep_ftp", "no_duplicate_pcaps",
+                  "feature_count_58", "packet_order_preserved", "behavioural_15_preserved", "cross_appended"):
+            self.assertTrue(c[k], k)
+        self.assertTrue(self.leak["no_zero_fill"])
+        self.assertTrue(self.leak["every_flow_traceable"])
+        self.assertIn("evaluation only", self.leak["used_for"])
+
+    def test_failure_mode_and_session_structure_recorded(self):
+        self.assertIn("failure_mode", self.verdict)
+        fm = self.verdict["failure_mode"]
+        self.assertIn("single_session_attack_recall_cross", fm)
+        self.assertIn("low_session_1to3_attack_recall_cross", fm)
+        self.assertIn("single_feature_shortcut", self.verdict)
+
+    def test_required_files_exist(self):
+        for name in ("final_test_metrics.csv", "cic_heldout_metrics.csv", "per_scenario_family_metrics.csv",
+                     "per_session_structure_metrics.csv", "bootstrap_cis.json", "ftps_encrypted_metrics.csv",
+                     "leakage_validation.json", "model_hashes_before_after.json", "final_verdict.json", "report.md"):
+            self.assertTrue((_IV2_RESULTS / name).is_file(), name)
+
+    def test_production_unchanged(self):
+        test = pd.read_parquet(ml.DATA_ROOT / "Processed_Data" / "test_selected.parquet")
+        model, _ = ml._load("histgradientboosting")
+        acc = float((model.predict(test[ml.FEATURES]) == test["Label"]).mean())
+        self.assertAlmostEqual(acc, 0.9803, places=4)
