@@ -1,0 +1,26 @@
+{
+  "capture_id": "benign_04",
+  "scenario": "mistype_success_2",
+  "label": "Benign",
+  "client": "raw-socket",
+  "server": "custom(custom-raw-socket)",
+  "environment": "pc41 (127.0.0.41)",
+  "interface": "lo",
+  "mode": "passive",
+  "scenario_family": "mistype",
+  "attempts": 1,
+  "duration_s": 0.0019,
+  "packet_count": 22,
+  "capture_timestamp": "2026-08-17T08:57:58.541794+00:00",
+  "source": "127.0.0.41",
+  "destination": "127.0.0.41:2730",
+  "capture_command": "tcpdump -i lo -w <pcap> -U -n 'host 127.0.0.41 and (tcp port 2730 or tcp port 20 or tcp portrange 59040-59079)'",
+  "verification_status": "valid",
+  "detail": {
+    "sessions": 1,
+    "successes": 1,
+    "failures": 2,
+    "label_reason": "benign_mistype_success",
+    "check_errors": []
+  }
+}

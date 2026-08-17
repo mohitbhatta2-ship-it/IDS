@@ -1,0 +1,20 @@
+{
+  "all_pass": true,
+  "checks": {
+    "disjoint_from_v1": true,
+    "disjoint_from_v2": true,
+    "disjoint_from_independent": true,
+    "disjoint_from_targeted": true,
+    "disjoint_from_robustness": true,
+    "disjoint_from_robust_train": true,
+    "disjoint_from_benign_failed_login": true,
+    "disjoint_from_cross_session": true,
+    "disjoint_from_per_connection": true,
+    "disjoint_from_independent_ftp_val": true,
+    "disjoint_from_independent_ftp_val2": true,
+    "no_duplicate_within_corpus": true,
+    "labels_only_from_folders": true,
+    "all_verified_valid": true
+  },
+  "n_new": 22
+}

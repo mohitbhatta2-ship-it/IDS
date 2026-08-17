@@ -3815,3 +3815,160 @@ class CrossSessionIndependentValidationResultsTests(TestCase):
         model, _ = ml._load("histgradientboosting")
         acc = float((model.predict(test[ml.FEATURES]) == test["Label"]).mean())
         self.assertAlmostEqual(acc, 0.9803, places=4)
+
+
+# ---------------------------------------------------------------------------
+# Per-connection + cross-session detector (packed single-session; proftpd test)
+# ---------------------------------------------------------------------------
+
+from predictor import ftp_per_connection as _fpc, retraining_per_connection as _rpc, independent_ftp_lab3 as _ivl3
+
+_PC_DIR = _P2(__file__).resolve().parents[2] / "validation" / "per_connection_pcaps"
+_HAS_PC = (_PC_DIR / "MANIFEST.csv").is_file()
+_IV3_DIR = _P2(__file__).resolve().parents[2] / "validation" / "independent_ftp_validation3_pcaps"
+_HAS_IV3 = (_IV3_DIR / "MANIFEST.csv").is_file()
+_PC_RESULTS = _P2(__file__).resolve().parents[2] / "validation" / "results" / "ftp_per_connection"
+_HAS_PC_RESULTS = (_PC_RESULTS / "final_verdict.json").is_file()
+
+
+class FtpPerConnectionFeatureTests(TestCase):
+    def test_schema_and_disjoint(self):
+        self.assertEqual(len(_fpc.PC_FEATURES), 11)
+        self.assertTrue(set(_fpc.PC_FEATURES).isdisjoint(set(_fb.BEHAV_FEATURES)))
+        self.assertTrue(set(_fpc.PC_FEATURES).isdisjoint(set(_fcs.CROSS_FEATURES)))
+
+    def test_feature_set_ordering_67(self):
+        self.assertEqual(len(_rpc.FEATURES_PC), 67)
+        self.assertEqual(_rpc.FEATURES_PC[:30], list(ml.FEATURES))          # 30 packet preserved, in order
+        self.assertEqual(_rpc.FEATURES_PC[43:54], list(_fpc.PC_FEATURES))    # per-connection block
+        self.assertEqual(_rpc.FEATURES_PC[54:], list(_fcs.CROSS_FEATURES))   # cross block
+        for f in ("ftp_failed_logins", "ftp_failed_login_ratio"):
+            self.assertNotIn(f, _rpc.FEATURES_PC)                            # C3 baseline drops these
+
+    def test_ablation_subsets(self):
+        self.assertEqual(len(_rpc.FEATURES_NO_CROSS), 54)      # per-connection only
+        self.assertEqual(len(_rpc.FEATURES_NO_PC), 56)         # cross only
+        self.assertTrue(set(_fpc.PC_FEATURES).isdisjoint(set(_rpc.FEATURES_NO_PC)))
+
+    def test_cic_app_features_nan(self):
+        cicX, _ = _rpc.load_cic_pc()
+        for f in _rpc.APP_FEATURES:
+            self.assertTrue(cicX[f].isna().all(), f)
+
+    @skipUnless(_SCAPY and _HAS_PC, "scapy + per_connection corpus")
+    def test_packed_single_session_has_high_per_connection_attempts(self):
+        # a packed single-session attack: 1 session but many attempts in that one connection
+        import glob
+        for p in glob.glob(str(_PC_DIR / "ftp_bruteforce" / "*single_packed_8*.pcap")):
+            pc = _fpc.per_connection_features_for_pcap(p); cs = _fcs.cross_session_features_for_pcap(p)
+            self.assertEqual(cs["ftpx_sessions_per_source"], 1.0)
+            self.assertGreaterEqual(pc["ftppc_max_attempts_per_conn"], 5.0)
+            self.assertGreaterEqual(pc["ftppc_max_fails_per_conn"], 5.0)
+
+
+@skipUnless(_HAS_PC, "per_connection corpus not present")
+class PerConnectionCorpusTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        with (_PC_DIR / "MANIFEST.csv").open() as f:
+            cls.rows = list(csv.DictReader(f))
+        cls.base = _P2(__file__).resolve().parents[2] / "validation"
+
+    def test_disjoint_from_all_prior_and_every_independent_test(self):
+        new = _pcap_sha_set(_PC_DIR)
+        for other in ("realistic_pcaps", "realistic_pcaps_v2", "independent_real_pcaps", "targeted_benign_pcaps",
+                      "robustness_pcaps", "robust_train_pcaps", "benign_failed_login_pcaps", "cross_session_pcaps",
+                      "independent_ftp_validation_pcaps", "independent_ftp_validation2_pcaps"):
+            self.assertTrue(new.isdisjoint(_pcap_sha_set(self.base / other)), other)
+
+    def test_labels_from_folders_and_valid(self):
+        for r in self.rows:
+            folder = "benign" if r["label"] == "Benign" else "ftp_bruteforce"
+            self.assertTrue(list((_PC_DIR / folder).glob(f"{r['capture_id']}_*.pcap")))
+            self.assertEqual(r["verification_status"], "valid", r["capture_id"])
+
+    def test_has_single_packed_attacks(self):
+        packed = [r for r in self.rows if r["scenario_family"] == "single_packed"]
+        self.assertTrue(packed)
+
+
+@skipUnless(_HAS_IV3, "third independent corpus not present")
+class IndependentFtp3CorpusTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        with (_IV3_DIR / "MANIFEST.csv").open() as f:
+            cls.rows = list(csv.DictReader(f))
+        cls.base = _P2(__file__).resolve().parents[2] / "validation"
+
+    def test_disjoint_from_all_prior_incl_pc_and_earlier_independent(self):
+        new = _pcap_sha_set(_IV3_DIR)
+        for other in ("realistic_pcaps", "realistic_pcaps_v2", "independent_real_pcaps", "targeted_benign_pcaps",
+                      "robustness_pcaps", "robust_train_pcaps", "benign_failed_login_pcaps", "cross_session_pcaps",
+                      "per_connection_pcaps", "independent_ftp_validation_pcaps", "independent_ftp_validation2_pcaps"):
+            self.assertTrue(new.isdisjoint(_pcap_sha_set(self.base / other)), other)
+
+    def test_new_server_client_network(self):
+        self.assertTrue(_ivl3.is_private_lab(_ivl3.SERVER_ADDR))
+        self.assertTrue(_ivl3.SERVER_ADDR.startswith("10.99."))
+        for r in self.rows:
+            self.assertEqual(r["server"], "proftpd")
+            self.assertEqual(r["interface"], _ivl3.VETH_H)
+
+    def test_has_single_and_multi_session_attacks(self):
+        ss = [r for r in self.rows if r["label"] == "FTP-BruteForce" and r["session_structure"] == "single_session"]
+        ms = [r for r in self.rows if r["label"] == "FTP-BruteForce" and r["session_structure"] == "multi_session"]
+        self.assertTrue(ss)
+        self.assertTrue(ms)
+
+
+@skipUnless(_HAS_PC_RESULTS, "committed per-connection results not present")
+class FtpPerConnectionResultsTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.verdict = json.loads((_PC_RESULTS / "final_verdict.json").read_text())
+        cls.hashes = json.loads((_PC_RESULTS / "model_hashes_before_after.json").read_text())
+        cls.leak = json.loads((_PC_RESULTS / "leakage_validation.json").read_text())
+
+    def test_verdict_is_one_of_the_four_and_not_promoted(self):
+        self.assertIn(self.verdict["verdict"], (
+            "PROMISING -- TARGET MET", "PROMISING -- NEEDS MORE DATA", "NOT EFFECTIVE",
+            "INVALID -- LEAKAGE/INTEGRITY FAILURE"))
+        self.assertFalse(self.verdict["promote"])
+
+    def test_frozen_unchanged(self):
+        self.assertTrue(self.hashes["unchanged"])
+        self.assertEqual(self.hashes["before"], self.hashes["after"])
+
+    def test_session_count_not_a_shortcut(self):
+        # the whole point: session count must NOT be the main signal, and no single-feature shortcut
+        self.assertFalse(self.verdict["session_count_is_main_signal"])
+        self.assertFalse(self.verdict["single_feature_shortcut"])
+
+    def test_single_session_attack_recall_recorded(self):
+        sr = self.verdict["single_session_attack_recall"]
+        for k in ("candidate_pc", "cross_session", "ablation_no_cross", "ablation_no_per_connection"):
+            self.assertIn(k, sr)
+
+    def test_leakage_and_feature_integrity(self):
+        self.assertEqual(self.leak["n_features_candidate"], 67)
+        self.assertTrue(self.leak["packet_order_preserved"])
+        self.assertTrue(self.leak["train_disjoint_from_test"])
+        self.assertTrue(self.leak["no_zero_fill_train"])
+        self.assertTrue(self.leak["no_zero_fill_test"])
+        self.assertTrue(self.leak["every_flow_traceable"])
+        self.assertIn("NOT the proftpd test", self.leak["selection_used"])
+
+    def test_required_files_exist(self):
+        for name in ("final_test_metrics.csv", "cic_heldout_metrics.csv", "per_scenario_family_metrics.csv",
+                     "per_session_structure_metrics.csv", "bootstrap_cis.json", "leakage_validation.json",
+                     "model_hashes_before_after.json", "final_verdict.json", "report.md"):
+            self.assertTrue((_PC_RESULTS / name).is_file(), name)
+
+    def test_production_unchanged(self):
+        test = pd.read_parquet(ml.DATA_ROOT / "Processed_Data" / "test_selected.parquet")
+        model, _ = ml._load("histgradientboosting")
+        acc = float((model.predict(test[ml.FEATURES]) == test["Label"]).mean())
+        self.assertAlmostEqual(acc, 0.9803, places=4)

@@ -1,0 +1,28 @@
+{
+  "capture_id": "benign_06",
+  "scenario": "mistype_success_2",
+  "label": "Benign",
+  "client": "raw-socket",
+  "server": "proftpd",
+  "environment": "netns-ivlab3",
+  "interface": "veth-iv3h",
+  "mode": "passive",
+  "scenario_family": "mistype",
+  "session_structure": "single_session",
+  "encrypted": false,
+  "sessions": 1,
+  "duration_s": 0.055,
+  "packet_count": 22,
+  "capture_timestamp": "2026-08-17T09:01:41.844517+00:00",
+  "source": "10.99.0.1",
+  "destination": "10.99.0.2:2424",
+  "capture_command": "tcpdump -i veth-iv3h -w <pcap> -U -n 'host 10.99.0.2 and (tcp port 2424 or tcp port 20 or tcp portrange 40000-40100)'",
+  "verification_status": "valid",
+  "detail": {
+    "sessions": 1,
+    "successes": 1,
+    "failures": 2,
+    "client": "raw-socket",
+    "check_errors": []
+  }
+}

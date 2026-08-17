@@ -1,0 +1,10 @@
+dimension,value,label,n,production,candidate2,C3_43,cross_session_58,candidate_pc_67,ablation_no_cross_54,ablation_no_per_connection_56
+session_structure,multi_session,FTP-BruteForce,23,0.0,0.0,0.8261,0.8261,0.913,0.8261,0.8696
+session_structure,multi_session,Benign,22,1.0,0.7727,1.0,1.0,1.0,1.0,1.0
+session_structure,single_session,FTP-BruteForce,5,0.0,0.0,1.0,0.8,0.8,0.8,0.8
+session_structure,single_session,Benign,22,0.9545,0.7727,0.9545,1.0,1.0,1.0,1.0
+sessions_per_source,1,FTP-BruteForce,5,0.0,0.0,1.0,0.8,0.8,0.8,0.8
+sessions_per_source,1,Benign,22,0.9545,0.7727,0.9545,1.0,1.0,1.0,1.0
+sessions_per_source,2-3,FTP-BruteForce,6,0.0,0.0,0.3333,0.3333,0.6667,0.3333,0.5
+sessions_per_source,2-3,Benign,22,1.0,0.7727,1.0,1.0,1.0,1.0,1.0
+sessions_per_source,4-6,FTP-BruteForce,17,0.0,0.0,1.0,1.0,1.0,1.0,1.0

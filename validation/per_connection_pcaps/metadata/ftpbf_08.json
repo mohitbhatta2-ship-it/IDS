@@ -1,0 +1,25 @@
+{
+  "capture_id": "ftpbf_08",
+  "scenario": "two_three_session_2",
+  "label": "FTP-BruteForce",
+  "client": "raw-socket",
+  "server": "custom(custom-raw-socket)",
+  "environment": "pc41 (127.0.0.41)",
+  "interface": "lo",
+  "mode": "passive",
+  "scenario_family": "multi_session",
+  "attempts": 2,
+  "duration_s": 0.0024,
+  "packet_count": 36,
+  "capture_timestamp": "2026-08-17T08:57:35.647605+00:00",
+  "source": "127.0.0.41",
+  "destination": "127.0.0.41:2730",
+  "capture_command": "tcpdump -i lo -w <pcap> -U -n 'host 127.0.0.41 and (tcp port 2730 or tcp port 20 or tcp portrange 59040-59079)'",
+  "verification_status": "valid",
+  "detail": {
+    "sessions": 2,
+    "failures": 4,
+    "label_reason": "attack_2_3_session",
+    "check_errors": []
+  }
+}

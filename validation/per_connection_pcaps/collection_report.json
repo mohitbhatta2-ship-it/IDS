@@ -1,0 +1,57 @@
+{
+  "experiment": "per_connection_corpus",
+  "created_utc": "2026-08-17T08:58:24.252163+00:00",
+  "purpose": "Attacks across the full session-structure spectrum incl. packed single-session, for TRAIN.",
+  "for_training": true,
+  "labels_from": "scenario folder",
+  "pcap_count": 32,
+  "benign_count": 16,
+  "ftp_bruteforce_count": 16,
+  "captures_passing_verification": 32,
+  "total_flows": 84,
+  "total_incomplete_flows": 0,
+  "diversity": {
+    "by_scenario_family": {
+      "single_packed": 6,
+      "eventual_success": 2,
+      "multi_session": 6,
+      "reconnecting": 1,
+      "slow": 1,
+      "clean": 3,
+      "mistype": 4,
+      "gave_up": 3,
+      "reconnect": 2,
+      "repeated": 3,
+      "multi_user": 1
+    },
+    "by_server": {
+      "custom(custom-raw-socket)": 32
+    }
+  },
+  "leakage": {
+    "all_pass": true,
+    "checks": {
+      "disjoint_from_v1": true,
+      "disjoint_from_v2": true,
+      "disjoint_from_independent": true,
+      "disjoint_from_targeted": true,
+      "disjoint_from_robustness": true,
+      "disjoint_from_robust_train": true,
+      "disjoint_from_benign_failed_login": true,
+      "disjoint_from_cross_session": true,
+      "disjoint_from_independent_ftp_val": true,
+      "disjoint_from_independent_ftp_val2": true,
+      "no_duplicate_within_corpus": true,
+      "labels_only_from_folders": true,
+      "all_verified_valid": true
+    },
+    "n_new": 32
+  },
+  "limitations": [
+    "Loopback lab; custom raw-socket + pyftpdlib (real independent tests use other servers).",
+    "TRAIN-only; disjoint from every independent test."
+  ],
+  "versions": {
+    "python": "3.11.15"
+  }
+}

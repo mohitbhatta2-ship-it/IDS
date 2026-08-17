@@ -1,6 +1,6 @@
-pure-ftpd independent validation lab file for pureuser.
-pure-ftpd independent validation lab file for pureuser.
-pure-ftpd independent validation lab file for pureuser.
-pure-ftpd independent validation lab file for pureuser.
-pure-ftpd independent validation lab file for pureuser.
-pure-ftpd independent validation lab file for pureuser.
+proftpd independent validation lab file for prouser.
+proftpd independent validation lab file for prouser.
+proftpd independent validation lab file for prouser.
+proftpd independent validation lab file for prouser.
+proftpd independent validation lab file for prouser.
+proftpd independent validation lab file for prouser.

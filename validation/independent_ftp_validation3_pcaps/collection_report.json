@@ -1,0 +1,67 @@
+{
+  "experiment": "independent_ftp_validation3_corpus",
+  "created_utc": "2026-08-17T09:02:20.029775+00:00",
+  "purpose": "Fresh independent test for the per-connection + cross-session detector.",
+  "test_only": true,
+  "server": "proftpd (real; not used before)",
+  "client_new": "ncftp",
+  "network": "veth + ip netns 10.99.0.0/24 (non-loopback, server 10.99.0.2)",
+  "pcap_count": 22,
+  "benign_count": 12,
+  "ftp_bruteforce_count": 10,
+  "captures_passing_verification": 22,
+  "total_flows": 72,
+  "total_incomplete_flows": 0,
+  "diversity": {
+    "by_scenario_family": {
+      "clean": 2,
+      "activity": 2,
+      "mistype": 3,
+      "gave_up": 2,
+      "reconnect": 1,
+      "repeated": 2,
+      "single_packed": 4,
+      "eventual_success": 2,
+      "multi_session": 2,
+      "cred_sweep": 1,
+      "slow": 1
+    },
+    "by_client": {
+      "ncftp": 5,
+      "curl": 1,
+      "raw-socket": 16
+    },
+    "by_session_structure": {
+      "single_session": 14,
+      "multi_session": 8
+    }
+  },
+  "leakage": {
+    "all_pass": true,
+    "checks": {
+      "disjoint_from_v1": true,
+      "disjoint_from_v2": true,
+      "disjoint_from_independent": true,
+      "disjoint_from_targeted": true,
+      "disjoint_from_robustness": true,
+      "disjoint_from_robust_train": true,
+      "disjoint_from_benign_failed_login": true,
+      "disjoint_from_cross_session": true,
+      "disjoint_from_per_connection": true,
+      "disjoint_from_independent_ftp_val": true,
+      "disjoint_from_independent_ftp_val2": true,
+      "no_duplicate_within_corpus": true,
+      "labels_only_from_folders": true,
+      "all_verified_valid": true
+    },
+    "n_new": 22
+  },
+  "limitations": [
+    "Single container: proftpd + netns give a different server + non-loopback stack, not a separate OS/host.",
+    "Test-only; never training/selection/tuning."
+  ],
+  "versions": {
+    "python": "3.11.15",
+    "proftpd": ""
+  }
+}

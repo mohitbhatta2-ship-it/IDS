@@ -1,0 +1,26 @@
+{
+  "capture_id": "benign_08",
+  "scenario": "reconnect_success_1",
+  "label": "Benign",
+  "client": "raw-socket",
+  "server": "custom(custom-raw-socket)",
+  "environment": "pc42 (127.0.0.42)",
+  "interface": "lo",
+  "mode": "passive",
+  "scenario_family": "reconnect",
+  "attempts": 2,
+  "duration_s": 0.0018,
+  "packet_count": 28,
+  "capture_timestamp": "2026-08-17T08:58:05.238402+00:00",
+  "source": "127.0.0.42",
+  "destination": "127.0.0.42:2730",
+  "capture_command": "tcpdump -i lo -w <pcap> -U -n 'host 127.0.0.42 and (tcp port 2730 or tcp port 20 or tcp portrange 59080-59119)'",
+  "verification_status": "valid",
+  "detail": {
+    "sessions": 2,
+    "successes": 1,
+    "failures": 1,
+    "label_reason": "benign_reconnect_success",
+    "check_errors": []
+  }
+}
