@@ -1,0 +1,25 @@
+{
+  "capture_id": "benign_12",
+  "scenario": "repeated_2",
+  "label": "Benign",
+  "client": "raw-socket",
+  "server": "custom(raw-socket)",
+  "environment": "af52 (127.0.0.52)",
+  "interface": "lo",
+  "mode": "passive",
+  "scenario_family": "repeated",
+  "attempts": 2,
+  "duration_s": 0.303,
+  "packet_count": 28,
+  "capture_timestamp": "2026-08-17T10:20:01.268697+00:00",
+  "source": "127.0.0.52",
+  "destination": "127.0.0.52:2830",
+  "capture_command": "tcpdump -i lo -w <pcap> -U -n 'host 127.0.0.52 and (tcp port 2830 or tcp port 20 or tcp portrange 58080-58119)'",
+  "verification_status": "valid",
+  "detail": {
+    "sessions": 2,
+    "successes": 2,
+    "label_reason": "benign_repeated",
+    "check_errors": []
+  }
+}

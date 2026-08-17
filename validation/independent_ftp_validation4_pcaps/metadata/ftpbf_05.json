@@ -1,0 +1,29 @@
+{
+  "capture_id": "ftpbf_05",
+  "scenario": "dict_then_success_4",
+  "label": "FTP-BruteForce",
+  "client": "raw-socket",
+  "server": "pure-ftpd",
+  "environment": "netns-ivlab4",
+  "interface": "veth-iv4h",
+  "mode": "passive",
+  "scenario_family": "dict_success",
+  "session_structure": "single_session",
+  "encrypted": false,
+  "sessions": 1,
+  "duration_s": 42.8703,
+  "packet_count": 40,
+  "capture_timestamp": "2026-08-17T10:33:57.894602+00:00",
+  "source": "10.111.0.1",
+  "destination": "10.111.0.2:2525",
+  "capture_command": "tcpdump -i veth-iv4h -w <pcap> -U -n 'host 10.111.0.2 and (tcp port 2525 or tcp port 20 or tcp portrange 41000-41100)'",
+  "verification_status": "valid",
+  "detail": {
+    "sessions": 1,
+    "successes": 1,
+    "failures": 4,
+    "client": "raw-socket",
+    "structure": "single_session",
+    "check_errors": []
+  }
+}

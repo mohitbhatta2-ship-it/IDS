@@ -1,0 +1,58 @@
+{
+  "candidate_af": {
+    "n": 371,
+    "accuracy": 0.9946091644204852,
+    "macro_precision": 0.9921875,
+    "macro_recall": 0.9959183673469387,
+    "macro_f1": 0.9940138117981154,
+    "weighted_f1": 0.994619341388389,
+    "confusion": {
+      "labels": [
+        "Benign",
+        "FTP-BruteForce"
+      ],
+      "matrix": [
+        [
+          126,
+          0
+        ],
+        [
+          2,
+          243
+        ]
+      ]
+    },
+    "FTP-BruteForce_support": 245,
+    "FTP-BruteForce_recall": 0.9918367346938776,
+    "Benign_support": 126,
+    "Benign_recall": 1.0
+  },
+  "ablation_no_forensic": {
+    "n": 371,
+    "accuracy": 0.9946091644204852,
+    "macro_precision": 0.9921875,
+    "macro_recall": 0.9959183673469387,
+    "macro_f1": 0.9940138117981154,
+    "weighted_f1": 0.994619341388389,
+    "confusion": {
+      "labels": [
+        "Benign",
+        "FTP-BruteForce"
+      ],
+      "matrix": [
+        [
+          126,
+          0
+        ],
+        [
+          2,
+          243
+        ]
+      ]
+    },
+    "FTP-BruteForce_support": 245,
+    "FTP-BruteForce_recall": 0.9918367346938776,
+    "Benign_support": 126,
+    "Benign_recall": 1.0
+  }
+}

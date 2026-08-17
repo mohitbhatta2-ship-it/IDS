@@ -1,0 +1,28 @@
+{
+  "capture_id": "benign_04",
+  "scenario": "typo_then_success_1",
+  "label": "Benign",
+  "client": "raw-socket",
+  "server": "pure-ftpd",
+  "environment": "netns-ivlab4",
+  "interface": "veth-iv4h",
+  "mode": "passive",
+  "scenario_family": "mistype",
+  "session_structure": "single_session",
+  "encrypted": false,
+  "sessions": 1,
+  "duration_s": 8.7554,
+  "packet_count": 24,
+  "capture_timestamp": "2026-08-17T10:25:31.354962+00:00",
+  "source": "10.111.0.1",
+  "destination": "10.111.0.2:2525",
+  "capture_command": "tcpdump -i veth-iv4h -w <pcap> -U -n 'host 10.111.0.2 and (tcp port 2525 or tcp port 20 or tcp portrange 41000-41100)'",
+  "verification_status": "valid",
+  "detail": {
+    "sessions": 1,
+    "successes": 1,
+    "failures": 1,
+    "client": "raw-socket",
+    "check_errors": []
+  }
+}

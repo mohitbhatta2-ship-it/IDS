@@ -1,0 +1,20 @@
+{
+  "experiment": "ftp_auth_forensics",
+  "created_utc": "2026-08-17T13:34:27.344548+00:00",
+  "train_sources": [
+    "v1",
+    "v2",
+    "targeted",
+    "robust_train",
+    "benign_failed_login",
+    "cross_session",
+    "per_connection",
+    "auth_forensics"
+  ],
+  "new_corpus": "validation/auth_forensics_pcaps",
+  "test_corpus": "validation/independent_ftp_validation4_pcaps (test-only)",
+  "n_features": 77,
+  "versions": {
+    "python": "3.11.15"
+  }
+}

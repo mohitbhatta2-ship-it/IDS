@@ -3972,3 +3972,196 @@ class FtpPerConnectionResultsTests(TestCase):
         model, _ = ml._load("histgradientboosting")
         acc = float((model.predict(test[ml.FEATURES]) == test["Label"]).mean())
         self.assertAlmostEqual(acc, 0.9803, places=4)
+
+
+# ---------------------------------------------------------------------------
+# Auth-forensics detector (typo-benign vs dictionary-attack; pure-ftpd test)
+# ---------------------------------------------------------------------------
+
+from predictor import ftp_auth_forensics as _faf, retraining_auth_forensics as _raf, independent_ftp_lab4 as _ivl4
+
+_AF_DIR = _P2(__file__).resolve().parents[2] / "validation" / "auth_forensics_pcaps"
+_HAS_AF = (_AF_DIR / "MANIFEST.csv").is_file()
+_IV4_DIR = _P2(__file__).resolve().parents[2] / "validation" / "independent_ftp_validation4_pcaps"
+_HAS_IV4 = (_IV4_DIR / "MANIFEST.csv").is_file()
+_AF_RESULTS = _P2(__file__).resolve().parents[2] / "validation" / "results" / "ftp_auth_forensics"
+_HAS_AF_RESULTS = (_AF_RESULTS / "final_verdict.json").is_file()
+
+
+class FtpAuthForensicsFeatureTests(TestCase):
+    def test_schema_and_disjoint(self):
+        self.assertEqual(len(_faf.FORENSIC_FEATURES), 10)
+        self.assertTrue(set(_faf.FORENSIC_FEATURES).isdisjoint(set(_fb.BEHAV_FEATURES)))
+        self.assertTrue(set(_faf.FORENSIC_FEATURES).isdisjoint(set(_fpc.PC_FEATURES)))
+        self.assertTrue(set(_faf.FORENSIC_FEATURES).isdisjoint(set(_fcs.CROSS_FEATURES)))
+
+    def test_feature_set_ordering_77(self):
+        self.assertEqual(len(_raf.FEATURES_AF), 77)
+        self.assertEqual(_raf.FEATURES_AF[:30], list(ml.FEATURES))            # 30 packet preserved, in order
+        self.assertEqual(_raf.FEATURES_AF[:67], list(_rpc.FEATURES_PC))       # per-connection candidate is the prefix
+        self.assertEqual(_raf.FEATURES_AF[67:], list(_faf.FORENSIC_FEATURES)) # forensic block appended
+        for f in ("ftp_failed_logins", "ftp_failed_login_ratio"):
+            self.assertNotIn(f, _raf.FEATURES_AF)                             # C3 baseline drops these
+
+    def test_ablation_subsets(self):
+        self.assertEqual(len(_raf.FEATURES_NO_FORENSIC), 67)                  # per-connection features only
+        self.assertEqual(_raf.FEATURES_NO_FORENSIC, list(_rpc.FEATURES_PC))
+        self.assertEqual(len(_raf.FEATURES_NO_EDITDIST), 74)                  # forensic minus 3 edit-distance
+        for f in ("ftpaf_min_editdist_fail_to_success", "ftpaf_mean_editdist_fail_to_success",
+                  "ftpaf_mean_editdist_consecutive"):
+            self.assertIn(f, _raf.FEATURES_AF)
+            self.assertNotIn(f, _raf.FEATURES_NO_EDITDIST)
+
+    def test_cic_app_features_nan(self):
+        cicX, _ = _raf.load_cic_af()
+        for f in _raf.APP_FEATURES:
+            self.assertTrue(cicX[f].isna().all(), f)
+
+    def test_levenshtein_typo_close_dictionary_far(self):
+        # a typo is edit-distance-close to the correct password; a dictionary guess is far
+        self.assertEqual(_faf._lev("labpass", "labpass"), 0)
+        self.assertEqual(_faf._lev("labpas", "labpass"), 1)     # dropped char (typo)
+        self.assertEqual(_faf._lev("labpasss", "labpass"), 1)   # added char (typo)
+        self.assertGreaterEqual(_faf._lev("123456", "labpass"), 5)   # dictionary guess (far)
+
+    def test_undefined_forensic_measurement_is_nan_not_zero(self):
+        # no failed attempts / no success -> distance-to-success is undefined -> NaN (never zero-filled)
+        import numpy as _np
+        self.assertEqual(sorted(_faf._ZERO_OK), sorted(
+            {"ftpaf_distinct_failed_pw", "ftpaf_distinct_pw_before_success",
+             "ftpaf_fails_before_success", "ftpaf_max_pw_len_spread"}))
+        self.assertNotIn("ftpaf_min_editdist_fail_to_success", _faf._ZERO_OK)
+
+    @skipUnless(_SCAPY and _HAS_AF, "scapy + auth_forensics corpus")
+    def test_typo_edit_distance_below_dictionary_on_corpus(self):
+        import glob
+        import numpy as _np
+        typo, dictg = [], []
+        for p in glob.glob(str(_AF_DIR / "benign" / "*typo_then_success*.pcap")):
+            v = _faf.forensic_features_for_pcap(p)["ftpaf_min_editdist_fail_to_success"]
+            if not _np.isnan(v):
+                typo.append(v)
+        for p in glob.glob(str(_AF_DIR / "ftp_bruteforce" / "*dict_then_success*.pcap")):
+            v = _faf.forensic_features_for_pcap(p)["ftpaf_min_editdist_fail_to_success"]
+            if not _np.isnan(v):
+                dictg.append(v)
+        if typo and dictg:
+            self.assertLess(max(typo), min(dictg))   # clean separation on the training corpus
+
+
+@skipUnless(_HAS_AF, "auth_forensics corpus not present")
+class AuthForensicsCorpusTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        with (_AF_DIR / "MANIFEST.csv").open() as f:
+            cls.rows = list(csv.DictReader(f))
+        cls.base = _P2(__file__).resolve().parents[2] / "validation"
+
+    def test_disjoint_from_all_prior_and_every_independent_test(self):
+        new = _pcap_sha_set(_AF_DIR)
+        for other in ("realistic_pcaps", "realistic_pcaps_v2", "independent_real_pcaps", "targeted_benign_pcaps",
+                      "robustness_pcaps", "robust_train_pcaps", "benign_failed_login_pcaps", "cross_session_pcaps",
+                      "per_connection_pcaps", "independent_ftp_validation_pcaps", "independent_ftp_validation2_pcaps",
+                      "independent_ftp_validation3_pcaps"):
+            self.assertTrue(new.isdisjoint(_pcap_sha_set(self.base / other)), other)
+
+    def test_labels_from_folders_and_valid(self):
+        for r in self.rows:
+            folder = "benign" if r["label"] == "Benign" else "ftp_bruteforce"
+            self.assertTrue(list((_AF_DIR / folder).glob(f"{r['capture_id']}_*.pcap")))
+            self.assertEqual(r["verification_status"], "valid", r["capture_id"])
+
+    def test_has_typo_and_dictionary_success_families(self):
+        fams = {r["scenario_family"] for r in self.rows}
+        self.assertIn("mistype", fams)          # benign typo-then-success
+        self.assertIn("dict_success", fams)     # attacker dictionary-then-success
+
+
+@skipUnless(_HAS_IV4, "fourth independent corpus not present")
+class IndependentFtp4CorpusTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        with (_IV4_DIR / "MANIFEST.csv").open() as f:
+            cls.rows = list(csv.DictReader(f))
+        cls.base = _P2(__file__).resolve().parents[2] / "validation"
+
+    def test_disjoint_from_all_prior_incl_af_and_earlier_independent(self):
+        new = _pcap_sha_set(_IV4_DIR)
+        for other in ("realistic_pcaps", "realistic_pcaps_v2", "independent_real_pcaps", "targeted_benign_pcaps",
+                      "robustness_pcaps", "robust_train_pcaps", "benign_failed_login_pcaps", "cross_session_pcaps",
+                      "per_connection_pcaps", "auth_forensics_pcaps", "independent_ftp_validation_pcaps",
+                      "independent_ftp_validation2_pcaps", "independent_ftp_validation3_pcaps"):
+            self.assertTrue(new.isdisjoint(_pcap_sha_set(self.base / other)), other)
+
+    def test_new_server_network(self):
+        self.assertTrue(_ivl4.is_private_lab(_ivl4.SERVER_ADDR))
+        self.assertTrue(_ivl4.SERVER_ADDR.startswith("10.111."))
+        for r in self.rows:
+            self.assertEqual(r["server"], "pure-ftpd")
+            self.assertEqual(r["interface"], _ivl4.VETH_H)
+
+    def test_has_typo_benign_and_dictionary_success_attacks(self):
+        typo = [r for r in self.rows if r["label"] == "Benign" and r["scenario_family"] == "mistype"]
+        dsucc = [r for r in self.rows if r["label"] == "FTP-BruteForce" and r["scenario_family"] == "dict_success"]
+        self.assertTrue(typo)
+        self.assertTrue(dsucc)
+
+
+@skipUnless(_HAS_AF_RESULTS, "committed auth-forensics results not present")
+class FtpAuthForensicsResultsTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.verdict = json.loads((_AF_RESULTS / "final_verdict.json").read_text())
+        cls.hashes = json.loads((_AF_RESULTS / "model_hashes_before_after.json").read_text())
+        cls.leak = json.loads((_AF_RESULTS / "leakage_validation.json").read_text())
+
+    def test_verdict_is_one_of_the_four_and_not_promoted(self):
+        self.assertIn(self.verdict["verdict"], (
+            "PROMISING -- TARGET MET", "PROMISING -- NEEDS MORE DATA",
+            "NOT EFFECTIVE -- DISTINCTION NOT RELIABLY OBSERVABLE",
+            "INVALID -- LEAKAGE/INTEGRITY FAILURE"))
+        self.assertFalse(self.verdict["promote"])
+
+    def test_frozen_unchanged(self):
+        self.assertTrue(self.hashes["unchanged"])
+        self.assertEqual(self.hashes["before"], self.hashes["after"])
+
+    def test_not_leaning_on_session_count_or_failed_logins(self):
+        # the whole point: separate typo vs dictionary WITHOUT a session-count / failure-count shortcut
+        self.assertFalse(self.verdict["session_count_is_main_signal"])
+        self.assertFalse(self.verdict["single_feature_shortcut"])
+        self.assertFalse(self.verdict["ftp_failed_logins_in_feature_set"])
+
+    def test_decisive_case_recorded(self):
+        dc = self.verdict["decisive_case"]
+        for k in ("benign_typo_recall", "attacker_dict_success_recall",
+                  "forensic_improves_decisive_case", "editdistance_carries_separation"):
+            self.assertIn(k, dc)
+        for m in ("candidate_af", "per_connection", "ablation_no_editdistance"):
+            self.assertIn(m, dc["benign_typo_recall"])
+            self.assertIn(m, dc["attacker_dict_success_recall"])
+
+    def test_leakage_and_feature_integrity(self):
+        self.assertEqual(self.leak["n_features_candidate"], 77)
+        self.assertTrue(self.leak["packet_order_preserved"])
+        self.assertTrue(self.leak["ftp_failed_logins_excluded"])
+        self.assertTrue(self.leak["train_disjoint_from_test"])
+        self.assertTrue(self.leak["no_zero_fill_train"])
+        self.assertTrue(self.leak["no_zero_fill_test"])
+        self.assertTrue(self.leak["every_flow_traceable"])
+        self.assertIn("NOT the pure-ftpd test", self.leak["selection_used"])
+
+    def test_required_files_exist(self):
+        for name in ("final_test_metrics.csv", "cic_heldout_metrics.csv", "per_scenario_family_metrics.csv",
+                     "bootstrap_cis.json", "leakage_validation.json", "model_hashes_before_after.json",
+                     "final_verdict.json", "report.md"):
+            self.assertTrue((_AF_RESULTS / name).is_file(), name)
+
+    def test_production_unchanged(self):
+        test = pd.read_parquet(ml.DATA_ROOT / "Processed_Data" / "test_selected.parquet")
+        model, _ = ml._load("histgradientboosting")
+        acc = float((model.predict(test[ml.FEATURES]) == test["Label"]).mean())
+        self.assertAlmostEqual(acc, 0.9803, places=4)

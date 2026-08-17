@@ -31,3 +31,6 @@ validation/models/ftp-cross-session/*.pkl !filter !diff !merge
 
 # Per-connection candidate + ablation models: store as normal blobs (LFS push unavailable here)
 validation/models/ftp-per-connection/*.pkl !filter !diff !merge
+
+# Auth-forensics candidate + ablation models: store as normal blobs (LFS push unavailable here)
+validation/models/ftp-auth-forensics/*.pkl !filter !diff !merge

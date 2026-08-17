@@ -1,0 +1,26 @@
+{
+  "capture_id": "ftpbf_12",
+  "scenario": "dict_then_success_8",
+  "label": "FTP-BruteForce",
+  "client": "raw-socket",
+  "server": "custom(raw-socket)",
+  "environment": "af50 (127.0.0.50)",
+  "interface": "lo",
+  "mode": "passive",
+  "scenario_family": "dict_success",
+  "attempts": 1,
+  "duration_s": 0.003,
+  "packet_count": 46,
+  "capture_timestamp": "2026-08-17T10:20:32.975998+00:00",
+  "source": "127.0.0.50",
+  "destination": "127.0.0.50:2830",
+  "capture_command": "tcpdump -i lo -w <pcap> -U -n 'host 127.0.0.50 and (tcp port 2830 or tcp port 20 or tcp portrange 58000-58039)'",
+  "verification_status": "valid",
+  "detail": {
+    "sessions": 1,
+    "successes": 1,
+    "failures": 8,
+    "label_reason": "attack_dict_then_success",
+    "check_errors": []
+  }
+}

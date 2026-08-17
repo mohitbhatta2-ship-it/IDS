@@ -1,0 +1,68 @@
+{
+  "per_connection_67": {
+    "accuracy": {
+      "mean": 0.9688804542272338,
+      "lo95": 0.875,
+      "hi95": 1.0
+    },
+    "ftp_recall": {
+      "mean": 1.0,
+      "lo95": 1.0,
+      "hi95": 1.0
+    },
+    "benign_recall": {
+      "mean": 0.94996301645273,
+      "lo95": 0.7857142857142857,
+      "hi95": 1.0
+    },
+    "false_positive_rate": {
+      "mean": 0.0500369835472702,
+      "lo95": 0.0,
+      "hi95": 0.21428571428571427
+    }
+  },
+  "candidate_af_77": {
+    "accuracy": {
+      "mean": 0.9690940419052213,
+      "lo95": 0.8888888888888888,
+      "hi95": 1.0
+    },
+    "ftp_recall": {
+      "mean": 0.8977796649514168,
+      "lo95": 0.6,
+      "hi95": 1.0
+    },
+    "benign_recall": {
+      "mean": 1.0,
+      "lo95": 1.0,
+      "hi95": 1.0
+    },
+    "false_positive_rate": {
+      "mean": 0.0,
+      "lo95": 0.0,
+      "hi95": 0.0
+    }
+  },
+  "ablation_no_forensic_67": {
+    "accuracy": {
+      "mean": 1.0,
+      "lo95": 1.0,
+      "hi95": 1.0
+    },
+    "ftp_recall": {
+      "mean": 1.0,
+      "lo95": 1.0,
+      "hi95": 1.0
+    },
+    "benign_recall": {
+      "mean": 1.0,
+      "lo95": 1.0,
+      "hi95": 1.0
+    },
+    "false_positive_rate": {
+      "mean": 0.0,
+      "lo95": 0.0,
+      "hi95": 0.0
+    }
+  }
+}
