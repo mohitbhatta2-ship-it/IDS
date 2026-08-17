@@ -64,6 +64,17 @@ FTP_LABEL = "FTP-BruteForce"
 MAX_FTP_PKTS = 6000
 MAX_FTP_SESSIONS = 512
 
+# A source's cross-session window ends after this many seconds of FTP inactivity (measured on
+# the capture clock, like FLOW_TIMEOUT). When a new FTP control packet arrives after the source
+# has been idle longer than this, the previous window's buffered context is discarded and a
+# fresh window begins -- so a new FTP session that starts after an earlier burst has ended
+# CANNOT inherit that burst's stale attack context. Contemporaneous connections (a genuine
+# multi-connection brute force reconnecting quickly) stay within one window and still aggregate,
+# preserving legitimate cross-session detection. This matters most on loopback, where every
+# local FTP connection shares the (127.0.0.1, 127.0.0.1) source-pair identity, so temporal
+# isolation is the only thing separating a finished attack burst from a later clean login.
+FTP_WINDOW_IDLE_TIMEOUT = 30.0
+
 _RESP_RE = re.compile(rb"^(\d{3})[ -]")
 _CMD_RE = re.compile(rb"^([A-Za-z]{3,4})(?:\s+(.*))?$")
 _KNOWN_VERBS = {"USER", "PASS", "QUIT", "RETR", "STOR", "LIST", "NLST", "MLSD", "PWD", "SYST",
@@ -173,6 +184,7 @@ class UnifiedLiveCaptureSession(live_capture.CaptureSession):
         self.ftp_flows = 0                # flows routed to (or recognised as) FTP
         self.ftp_detections = 0           # flows the FTP model called FTP-BruteForce
         self.behavioral_unavailable = 0   # FTP-relevant flows scored without behavioural features
+        self._window_resets = 0           # cross-session windows reset after a source idle gap
 
     # -- capture thread: warm BOTH the production model and the FTP candidate --
 
@@ -232,16 +244,26 @@ class UnifiedLiveCaptureSession(live_capture.CaptureSession):
             return  # encrypted: nothing cleartext to buffer
 
         session_key = known["session"]
+        t = float(pkt.time)
         with self._ftp_lock:
             sess = self._ftp_sessions.get(session_key)
+            if sess is not None and (t - sess["last"]) > FTP_WINDOW_IDLE_TIMEOUT:
+                # The source went idle past the window: the previous burst has ended. Drop its
+                # buffered context so this new session starts fresh and cannot inherit stale
+                # attack history (state isolation across temporally-separate bursts).
+                self._ftp_sessions.pop(session_key, None)
+                self._window_resets += 1
+                sess = None
             if sess is None:
                 if len(self._ftp_sessions) >= MAX_FTP_SESSIONS:
                     oldest = min(self._ftp_sessions, key=lambda k: self._ftp_sessions[k]["last"])
                     self._ftp_sessions.pop(oldest, None)
-                sess = {"pkts": deque(maxlen=MAX_FTP_PKTS), "last": 0.0}
+                sess = {"pkts": deque(maxlen=MAX_FTP_PKTS), "last": t, "window_start": t,
+                        "streams": set()}
                 self._ftp_sessions[session_key] = sess
             sess["pkts"].append(pkt)
-            sess["last"] = float(pkt.time)
+            sess["last"] = t
+            sess["streams"].add(sk)
 
     def _session_for_flow(self, flow):
         """Return (session_key, is_ftps) for a flow, or (None, False) if it is not FTP."""
@@ -430,6 +452,7 @@ class UnifiedLiveCaptureSession(live_capture.CaptureSession):
                 "ftp_flows": self.ftp_flows,
                 "ftp_detections": self.ftp_detections,
                 "behavioral_unavailable": self.behavioral_unavailable,
+                "window_resets": self._window_resets,
                 "open_flows": len(self._flows),
                 "ftp_sessions": len(self._ftp_sessions),
                 "started_at": self.started_at.isoformat(timespec="seconds"),

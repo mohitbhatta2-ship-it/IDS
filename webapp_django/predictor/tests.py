@@ -4402,3 +4402,166 @@ class FtpIntegrationUiTests(TestCase):
         import re as _re
         block = _re.search(r'id="live-model".*?</select>', html, _re.DOTALL).group(0)
         self.assertEqual(block.count("<option"), len(ml.available_models()))
+
+
+# ---------------------------------------------------------------------------
+# FTP live-session state isolation (idle-gap window reset; loopback degeneracy)
+# ---------------------------------------------------------------------------
+# On loopback client_ip == server_ip == 127.0.0.1, so every local FTP connection shares the
+# same source-pair identity. The cross-session window must reset after the source goes idle so
+# a later clean login cannot inherit an earlier brute-force burst's stale context, while
+# contemporaneous connections (a genuine multi-connection brute force) still aggregate.
+
+def _loopbackify(path, offset):
+    """Remap a corpus capture to true loopback (both IPs 127.0.0.1) and shift its time base.
+
+    Ports (incl. Dst Port, a model feature) and payloads/lengths/flags are preserved, so the
+    prediction is unchanged -- only the endpoints collapse to 127.0.0.1, reproducing the
+    loopback degeneracy where all local FTP connections share one (client, server) identity.
+    """
+    from scapy.all import rdpcap
+    from scapy.layers.inet import IP, TCP
+    from scapy.layers.l2 import Ether
+    pkts = rdpcap(path); out = []; t0 = float(pkts[0].time)
+    for pk in pkts:
+        pk = pk.copy()
+        if IP in pk:
+            pk[IP].src = "127.0.0.1"; pk[IP].dst = "127.0.0.1"; del pk[IP].chksum
+            if TCP in pk:
+                del pk[TCP].chksum
+        p2 = Ether(bytes(pk)); p2.time = round(float(pk.time) - t0 + offset, 6)
+        out.append(p2)
+    out.sort(key=lambda p: float(p.time))
+    return out, float(out[-1].time)
+
+
+def _feed(seq):
+    sess = _flive.UnifiedLiveCaptureSession(None, ml.DEFAULT_MODEL)
+    for pk in seq:
+        sess._handle(pk)
+    sess._flush_all()
+    return sess
+
+
+@skipUnless(_SCAPY, "scapy required")
+class FtpLiveStateIsolationTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        _flive.live_capture._ensure_live_on_path()
+        cls.att = _first_pcap(str(_PCDIR / "ftp_bruteforce" / "*single_packed*.pcap"),
+                              str(_AFDIR / "ftp_bruteforce" / "*dict_fail*.pcap"))
+        cls.ben = _first_pcap(str(_AFDIR / "benign" / "*clean*.pcap"),
+                              str(_PCDIR / "benign" / "*.pcap"))
+
+    def setUp(self):
+        if not self.att or not self.ben:
+            self.skipTest("FTP attacker/benign corpus not present")
+
+    # 1. brute force followed by a clean login on loopback -> clean login is isolated (Benign)
+    def test_bruteforce_then_clean_login_isolated_by_idle_gap(self):
+        apk, alast = _loopbackify(self.att, 0.0)
+        bpk, _ = _loopbackify(self.ben, alast + _flive.FTP_WINDOW_IDLE_TIMEOUT + 5.0)
+        snap = _feed(apk + bpk).snapshot()
+        self.assertGreaterEqual(snap["ftp_detections"], 1)       # the attack itself is detected
+        self.assertGreaterEqual(snap["window_resets"], 1)        # the source window was reset
+        clean = snap["recent"][0]                                # last classified = the clean login
+        self.assertEqual(clean["routed"], "ftp")
+        self.assertTrue(clean["behavioral_available"])           # scored by the FTP detector on its OWN context
+        self.assertFalse(clean["is_ftp_bruteforce"])
+        self.assertEqual(clean["label"], "Benign")
+        self.assertEqual(clean["session"].get("failed_logins"), 0)   # no stale attack failures leaked in
+
+    # ... and WITHOUT the gap the same-window login inherits context (documents the degeneracy)
+    def test_same_window_login_still_sees_active_source_context(self):
+        apk, alast = _loopbackify(self.att, 0.0)
+        bpk, _ = _loopbackify(self.ben, alast + 1.0)             # within the active window
+        snap = _feed(apk + bpk).snapshot()
+        self.assertEqual(snap["window_resets"], 0)
+        clean = snap["recent"][0]
+        self.assertGreater(clean["session"].get("failed_logins", 0), 0)  # aggregated with the burst
+
+    # 2. an independent clean login (no prior context) stays Benign
+    def test_independent_clean_login_is_benign(self):
+        snap = _feed(_loopbackify(self.ben, 0.0)[0]).snapshot()
+        self.assertEqual(snap["window_resets"], 0)
+        rec = snap["recent"][0]
+        self.assertEqual(rec["routed"], "ftp")
+        self.assertTrue(rec["behavioral_available"])
+        self.assertEqual(rec["label"], "Benign")
+
+    # 3. a multi-connection brute force within one window remains detectable (aggregation kept)
+    def test_multi_session_bruteforce_still_detected(self):
+        a1, l1 = _loopbackify(self.att, 0.0)
+        a2, _ = _loopbackify(self.att, l1 + 2.0)                 # second connection, same window
+        snap = _feed(a1 + a2).snapshot()
+        self.assertEqual(snap["window_resets"], 0)              # contemporaneous -> not reset
+        self.assertGreaterEqual(snap["ftp_detections"], 1)
+
+    # mechanism: the window resets after an idle gap, and the fresh window holds only new packets
+    def test_window_reset_mechanism(self):
+        apk, alast = _loopbackify(self.att, 0.0)
+        bpk, _ = _loopbackify(self.ben, alast + _flive.FTP_WINDOW_IDLE_TIMEOUT + 5.0)
+        sess = _flive.UnifiedLiveCaptureSession(None, ml.DEFAULT_MODEL)
+        for pk in apk:
+            sess._handle(pk)
+        # after the attack burst, exactly one source window exists with the attack packets
+        self.assertEqual(len(sess._ftp_sessions), 1)
+        key = next(iter(sess._ftp_sessions))
+        attack_pkts = len(sess._ftp_sessions[key]["pkts"])
+        self.assertGreater(attack_pkts, 0)
+        for pk in bpk:
+            sess._handle(pk)
+        # the idle gap reset the window; it now holds only the (smaller) clean-login capture
+        self.assertGreaterEqual(sess._window_resets, 1)
+        self.assertLess(len(sess._ftp_sessions[key]["pkts"]), attack_pkts + 1)
+        # strongest identifier: the window tracks its connections by 5-tuple stream key
+        self.assertTrue(all(isinstance(s, tuple) for s in sess._ftp_sessions[key]["streams"]))
+
+
+class FtpLiveIsolationDoesNotAffectOtherPathsTests(TestCase):
+    # 4. non-FTP and FTPS behaviour is unchanged by the window logic
+    def test_window_constant_is_sane(self):
+        self.assertIsInstance(_flive.FTP_WINDOW_IDLE_TIMEOUT, float)
+        self.assertGreater(_flive.FTP_WINDOW_IDLE_TIMEOUT, 0)
+
+    @skipUnless(_SCAPY, "scapy required")
+    def test_non_ftp_flow_never_creates_a_window_or_resets(self):
+        _flive.live_capture._ensure_live_on_path()
+        from scapy.layers.inet import IP, TCP
+        from scapy.packet import Raw
+        sess = _flive.UnifiedLiveCaptureSession(None, ml.DEFAULT_MODEL)
+        t = 1000.0
+        pkts = []
+        for i in range(6):
+            p = IP(src="10.0.0.5", dst="10.0.0.9") / TCP(sport=51000, dport=80, flags="PA", seq=i) / Raw(load=b"GET / HTTP/1.1\r\nHost: x\r\n\r\n"); p.time = t + i * 0.1
+            pkts.append(p)
+        f1 = IP(src="10.0.0.5", dst="10.0.0.9") / TCP(sport=51000, dport=80, flags="FA"); f1.time = t + 1
+        f2 = IP(src="10.0.0.9", dst="10.0.0.5") / TCP(sport=80, dport=51000, flags="FA"); f2.time = t + 1.1
+        for p in pkts + [f1, f2]:
+            sess._handle(p)
+        sess._flush_all()
+        snap = sess.snapshot()
+        self.assertEqual(len(sess._ftp_sessions), 0)     # no FTP window for non-FTP traffic
+        self.assertEqual(snap["window_resets"], 0)
+        self.assertEqual(snap["recent"][0]["routed"], "production")
+
+    @skipUnless(_SCAPY, "scapy required")
+    def test_ftps_never_buffers_or_resets_a_window(self):
+        _flive.live_capture._ensure_live_on_path()
+        from scapy.layers.inet import IP, TCP
+        from scapy.packet import Raw
+        sess = _flive.UnifiedLiveCaptureSession(None, ml.DEFAULT_MODEL)
+        t = 1000.0
+        a = IP(src="10.0.0.5", dst="10.0.0.9") / TCP(sport=52000, dport=21, flags="PA") / Raw(load=b"AUTH TLS\r\n"); a.time = t
+        enc = IP(src="10.0.0.9", dst="10.0.0.5") / TCP(sport=21, dport=52000, flags="PA") / Raw(load=bytes(range(30))); enc.time = t + 0.2
+        rst = IP(src="10.0.0.5", dst="10.0.0.9") / TCP(sport=52000, dport=21, flags="R"); rst.time = t + 0.3
+        for p in (a, enc, rst):
+            sess._handle(p)
+        sess._flush_all()
+        snap = sess.snapshot()
+        self.assertEqual(len(sess._ftp_sessions), 0)     # encrypted control is never buffered
+        self.assertEqual(snap["window_resets"], 0)
+        rec = snap["recent"][0]
+        self.assertEqual(rec["routed"], "production")
+        self.assertEqual(rec["behavioral_reason"], "encrypted-ftps")

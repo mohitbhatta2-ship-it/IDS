@@ -91,6 +91,30 @@ attempt/failure/connection summary — “one NIDS”, not two systems.
   in the dropdown.
 - **Offline / batch / manual prediction paths unchanged.**
 
+## Live-session state isolation (loopback degeneracy)
+
+Cross-session FTP features aggregate a source's connections. The source window is keyed by
+`(client_ip, server_ip)`, and individual connections are tracked by their **5-tuple stream
+identity**. On loopback `client_ip == server_ip == 127.0.0.1`, so *every* local FTP connection
+shares one source-pair identity — a finished brute-force burst and a later clean login collapse
+into the same window, and the clean login could inherit the burst's stale attack context.
+
+Fix (session/context level only — no model or heuristic change): a source window **resets after
+`FTP_WINDOW_IDLE_TIMEOUT` (30 s) of FTP inactivity**, measured on the capture clock. When a new
+FTP control packet arrives after the source has been idle longer than that, the previous
+window's buffered context is discarded and a fresh window begins, so a new FTP session **cannot
+inherit stale attack history** from an earlier, temporally-separate burst. Contemporaneous
+connections (a genuine multi-connection brute force reconnecting quickly) stay within one window
+and still aggregate, preserving legitimate cross-session detection. A `window_resets` counter is
+exposed in the status snapshot.
+
+Note: within a *single active burst* window, a login from the same source is still evaluated
+with that source's context (on loopback this is the only case where a same-IP login sees the
+attack) — that is correct, since the source is actively attacking. Isolation applies once the
+source goes idle and the context becomes stale. A very slow multi-connection brute force spaced
+wider than the idle timeout will fragment into separate windows; per-connection detection of
+packed attacks is unaffected by windowing.
+
 ## Limitations (honest)
 
 The FTP candidate is the best **validated** FTP candidate but did **not** strictly meet the
