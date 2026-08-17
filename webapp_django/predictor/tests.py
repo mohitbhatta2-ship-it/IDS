@@ -3487,3 +3487,82 @@ class FtpExtExperimentResultsTests(TestCase):
         model, _ = ml._load("histgradientboosting")
         acc = float((model.predict(test[ml.FEATURES]) == test["Label"]).mean())
         self.assertAlmostEqual(acc, 0.9803, places=4)
+
+
+# ---------------------------------------------------------------------------
+# Controlled ftp_failed_logins ablation
+# ---------------------------------------------------------------------------
+
+_ABL_RESULTS = _P2(__file__).resolve().parents[2] / "validation" / "results" / "ftp_failed_login_ablation"
+_HAS_ABL_RESULTS = (_ABL_RESULTS / "final_verdict.json").is_file()
+
+
+class FtpFailedLoginAblationFeatureSetTests(TestCase):
+    def test_candidate_feature_sets_are_correct_ablations(self):
+        from predictor.management.commands.ftp_failed_login_ablation import F45, F44, F43, F40, FAILED, RATIO, ERR5XX
+        self.assertEqual(len(F45), 45)
+        # C2 removes exactly ftp_failed_logins
+        self.assertEqual(set(F45) - set(F44), {FAILED})
+        # C3 removes exactly failed_logins + ratio
+        self.assertEqual(set(F45) - set(F43), {FAILED, RATIO})
+        # C4 removes all direct failure-volume encoders; keeps the 30 packet features
+        self.assertEqual(F40[:30], list(ml.FEATURES))
+        for f in (FAILED, RATIO, ERR5XX):
+            self.assertNotIn(f, F40)
+
+    def test_packet_features_preserved_in_all_sets(self):
+        from predictor.management.commands.ftp_failed_login_ablation import F45, F44, F43, F40
+        for fs in (F45, F44, F43, F40):
+            self.assertEqual(fs[:30], list(ml.FEATURES))     # 30 packet features preserved, in order
+
+
+@skipUnless(_HAS_ABL_RESULTS, "committed ablation results not present")
+class FtpFailedLoginAblationResultsTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.verdict = json.loads((_ABL_RESULTS / "final_verdict.json").read_text())
+        cls.hashes = json.loads((_ABL_RESULTS / "model_hashes_before_after.json").read_text())
+        cls.leak = json.loads((_ABL_RESULTS / "leakage_validation.json").read_text())
+
+    def test_verdict_is_expected_and_not_promoted(self):
+        self.assertIn(self.verdict["verdict"], (
+            "TARGET MET -- ftp_failed_logins REMOVAL FIXES BENIGN FPs",
+            "TRADE-OFF -- BENIGN IMPROVES BUT FTP DETECTION SUFFERS",
+            "BENIGN IMPROVED WITHOUT LOSING FTP -- BUT TARGET NOT FULLY MET",
+            "ftp_failed_logins NOT THE (SOLE) CAUSE -- NO BENIGN IMPROVEMENT"))
+        self.assertFalse(self.verdict["promote"])
+
+    def test_frozen_unchanged(self):
+        self.assertTrue(self.hashes["unchanged"])
+        self.assertEqual(self.hashes["before"], self.hashes["after"])
+
+    def test_selection_did_not_use_the_vsftpd_test(self):
+        self.assertIn("CIC", self.leak["selection_used"])
+        self.assertIn("LOCO", self.leak["selection_used"])
+        self.assertIn("NOT the vsFTPD", self.leak["selection_used"])
+        self.assertTrue(self.leak["test_is_test_only"])
+
+    def test_data_held_constant_and_disjoint(self):
+        self.assertTrue(self.leak["data_held_constant"])
+        self.assertTrue(self.leak["train_disjoint_from_test"])
+        self.assertTrue(self.leak["packet_features_preserved"])
+        self.assertTrue(self.leak["no_zero_fill_train"])
+        self.assertTrue(self.leak["no_zero_fill_test"])
+
+    def test_tradeoff_diagnostics_recorded(self):
+        for k in ("removing_failed_logins_helps_benign", "removing_failed_logins_damages_ftp",
+                  "cic_no_regression", "selected_test", "current_c1_test", "robustness"):
+            self.assertIn(k, self.verdict)
+
+    def test_required_files_exist(self):
+        for name in ("final_test_metrics.csv", "cic_heldout_metrics.csv", "loco_pooled_metrics.json",
+                     "per_scenario_family_metrics.csv", "bootstrap_cis.json", "ftps_encrypted_metrics.csv",
+                     "leakage_validation.json", "model_hashes_before_after.json", "final_verdict.json", "report.md"):
+            self.assertTrue((_ABL_RESULTS / name).is_file(), name)
+
+    def test_production_unchanged(self):
+        test = pd.read_parquet(ml.DATA_ROOT / "Processed_Data" / "test_selected.parquet")
+        model, _ = ml._load("histgradientboosting")
+        acc = float((model.predict(test[ml.FEATURES]) == test["Label"]).mean())
+        self.assertAlmostEqual(acc, 0.9803, places=4)

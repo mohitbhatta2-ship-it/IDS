@@ -1,0 +1,7 @@
+model,n,ftp_recall,benign_recall
+production,31,0.0,1.0
+candidate2,31,0.375,1.0
+C1_full_45,31,0.0,1.0
+C2_no_failed_logins_44,31,0.0,1.0
+C3_no_failed_or_ratio_43,31,0.0,1.0
+C4_alt_no_failure_volume_40,31,0.041666666666666664,1.0

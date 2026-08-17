@@ -1,0 +1,184 @@
+{
+  "verdict": "BENIGN IMPROVED WITHOUT LOSING FTP -- BUT TARGET NOT FULLY MET",
+  "promote": false,
+  "selected_model": "C3_no_failed_or_ratio_43",
+  "target_met": false,
+  "removing_failed_logins_helps_benign": true,
+  "removing_failed_logins_damages_ftp": false,
+  "cic_no_regression": true,
+  "summary": "Removing ftp_failed_logins improves the benign side (recall 0.852->0.869, FPR 0.148->0.131) while holding FTP recall (1.000); but the target thresholds are not all met (benign>=0.90? False; FPR<=0.10? False) -- gave_up 0.0.",
+  "selected_test": {
+    "ftp_recall": 1.0,
+    "benign_recall": 0.8688524590163934,
+    "false_positive_rate": 0.13114754098360656,
+    "ftp_precision": 0.8974358974358975,
+    "macro_f1": 0.9378852536747273,
+    "accuracy": 0.9389312977099237
+  },
+  "current_c1_test": {
+    "ftp_recall": 1.0,
+    "benign_recall": 0.8524590163934426,
+    "false_positive_rate": 0.14754098360655737,
+    "macro_f1": 0.9299756488685633
+  },
+  "ci_lower_ftp_recall": 1.0,
+  "ci_lower_benign_recall": 0.6808510638297872,
+  "robustness": {
+    "gave_up": 0.0,
+    "mistype": 0.75,
+    "eventual_success": 1.0
+  },
+  "caveats": [
+    "Data held constant (CIC+v1+v2+targeted+robust_train); only the feature set varies.",
+    "Frozen vsFTPD corpus evaluated once for reporting; never used for training/selection/tuning.",
+    "Loopback/vsFTPD single-container lab; small test corpus (wide CIs).",
+    "No promotion, no threshold/heuristic change, no merge."
+  ],
+  "selection_reason": "CIC-gate=True (no CIC regression), LOCO macro-F1 0.9948 (best gate-passer)",
+  "shap": {
+    "features": [
+      "Init Fwd Win Byts",
+      "Fwd IAT Tot",
+      "Fwd IAT Max",
+      "Dst Port",
+      "Fwd IAT Mean",
+      "Fwd Header Len",
+      "Flow IAT Max",
+      "Flow Duration",
+      "Fwd Pkts/s",
+      "TotLen Fwd Pkts",
+      "Subflow Fwd Byts",
+      "Fwd Pkt Len Mean",
+      "Fwd Seg Size Avg",
+      "Fwd Pkt Len Max",
+      "Flow IAT Mean",
+      "Flow Pkts/s",
+      "Pkt Len Max",
+      "Pkt Len Mean",
+      "Fwd IAT Min",
+      "Bwd Pkt Len Mean",
+      "Pkt Size Avg",
+      "Bwd Seg Size Avg",
+      "Bwd Pkt Len Max",
+      "TotLen Bwd Pkts",
+      "Subflow Bwd Byts",
+      "Pkt Len Var",
+      "Pkt Len Std",
+      "Flow IAT Min",
+      "Fwd Seg Size Min",
+      "Fwd Pkt Len Std",
+      "ftp_login_attempts",
+      "ftp_successful_logins",
+      "ftp_has_successful_auth",
+      "ftp_user_commands",
+      "ftp_distinct_commands",
+      "ftp_total_commands",
+      "ftp_data_setup_responses",
+      "ftp_data_commands",
+      "ftp_error_responses_5xx",
+      "ftp_ok_responses_2xx",
+      "ftp_control_connections",
+      "ftp_reconnects",
+      "ftp_cmds_per_connection"
+    ],
+    "top12": [
+      {
+        "feature": "Dst Port",
+        "share": 0.16651359635669216
+      },
+      {
+        "feature": "Fwd Seg Size Min",
+        "share": 0.1595811481125557
+      },
+      {
+        "feature": "Init Fwd Win Byts",
+        "share": 0.08860101770576702
+      },
+      {
+        "feature": "ftp_error_responses_5xx",
+        "share": 0.04784345425995169
+      },
+      {
+        "feature": "Fwd IAT Min",
+        "share": 0.04103352292556323
+      },
+      {
+        "feature": "Fwd Header Len",
+        "share": 0.03579755805585141
+      },
+      {
+        "feature": "Flow IAT Min",
+        "share": 0.03462302995381754
+      },
+      {
+        "feature": "Flow IAT Mean",
+        "share": 0.03256084253171406
+      },
+      {
+        "feature": "ftp_user_commands",
+        "share": 0.032309056919054856
+      },
+      {
+        "feature": "Fwd Pkts/s",
+        "share": 0.030363704375677866
+      },
+      {
+        "feature": "Flow IAT Max",
+        "share": 0.028817736781407317
+      },
+      {
+        "feature": "Flow Pkts/s",
+        "share": 0.026915474820613766
+      }
+    ],
+    "max_feature": "Dst Port",
+    "max_share": 0.16651359635669216,
+    "behavioural_share": 0.12021974297685332,
+    "cic_artifact_share": 0.4146957621750149,
+    "failed_logins_present": false
+  },
+  "ftps": [
+    {
+      "model": "production",
+      "n": 31,
+      "ftp_recall": 0.0,
+      "benign_recall": 1.0
+    },
+    {
+      "model": "candidate2",
+      "n": 31,
+      "ftp_recall": 0.375,
+      "benign_recall": 1.0
+    },
+    {
+      "model": "C1_full_45",
+      "n": 31,
+      "ftp_recall": 0.0,
+      "benign_recall": 1.0
+    },
+    {
+      "model": "C2_no_failed_logins_44",
+      "n": 31,
+      "ftp_recall": 0.0,
+      "benign_recall": 1.0
+    },
+    {
+      "model": "C3_no_failed_or_ratio_43",
+      "n": 31,
+      "ftp_recall": 0.0,
+      "benign_recall": 1.0
+    },
+    {
+      "model": "C4_alt_no_failure_volume_40",
+      "n": 31,
+      "ftp_recall": 0.041666666666666664,
+      "benign_recall": 1.0
+    }
+  ],
+  "candidates": {
+    "C1_full_45": 45,
+    "C2_no_failed_logins_44": 44,
+    "C3_no_failed_or_ratio_43": 43,
+    "C4_alt_no_failure_volume_40": 40
+  }
+}

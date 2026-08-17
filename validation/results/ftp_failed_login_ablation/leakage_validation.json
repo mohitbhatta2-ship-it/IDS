@@ -1,0 +1,22 @@
+{
+  "train_sources": [
+    "v1",
+    "v2",
+    "targeted",
+    "robust_train"
+  ],
+  "data_held_constant": true,
+  "train_disjoint_from_test": true,
+  "test_is_test_only": true,
+  "labels_from_folders": true,
+  "no_zero_fill_train": true,
+  "no_zero_fill_test": true,
+  "candidate_feature_sizes": {
+    "C1_full_45": 45,
+    "C2_no_failed_logins_44": 44,
+    "C3_no_failed_or_ratio_43": 43,
+    "C4_alt_no_failure_volume_40": 40
+  },
+  "packet_features_preserved": true,
+  "selection_used": "CIC held-out + LOCO on approved corpora only (NOT the vsFTPD test)"
+}

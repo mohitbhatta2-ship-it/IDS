@@ -1,0 +1,15 @@
+{
+  "experiment": "ftp_failed_login_ablation",
+  "created_utc": "2026-08-17T01:45:07.409746+00:00",
+  "train_sources": [
+    "v1",
+    "v2",
+    "targeted",
+    "robust_train"
+  ],
+  "test_corpus": "validation/independent_ftp_validation_pcaps (test-only)",
+  "selected_model": "C3_no_failed_or_ratio_43",
+  "versions": {
+    "python": "3.11.15"
+  }
+}
