@@ -1,0 +1,26 @@
+{
+  "capture_id": "benign_06",
+  "scenario": "giveup_single_4",
+  "label": "Benign",
+  "client": "raw-socket",
+  "server": "custom(custom-raw-socket)",
+  "environment": "cs31 (127.0.0.31)",
+  "interface": "lo",
+  "mode": "passive",
+  "scenario_family": "gave_up",
+  "attempts": 1,
+  "duration_s": 0.0016,
+  "packet_count": 27,
+  "capture_timestamp": "2026-08-17T02:13:56.995572+00:00",
+  "source": "127.0.0.31",
+  "destination": "127.0.0.31:2630",
+  "capture_command": "tcpdump -i lo -w <pcap> -U -n 'host 127.0.0.31 and (tcp port 2630 or tcp port 20 or tcp portrange 60080-60119)'",
+  "verification_status": "valid",
+  "detail": {
+    "sessions": 1,
+    "successes": 0,
+    "failures": 4,
+    "label_reason": "benign_giveup_single",
+    "check_errors": []
+  }
+}

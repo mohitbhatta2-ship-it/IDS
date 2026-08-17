@@ -1,0 +1,141 @@
+{
+  "verdict": "PROMISING -- TARGET MET",
+  "promote": false,
+  "selected_model": "candidate_cross_unweighted",
+  "target_met": true,
+  "ftp_recall_preserved": true,
+  "benign_improved_vs_c1": true,
+  "cic_no_regression": true,
+  "summary": "Cross-session features meet the target on the frozen vsFTPD test WITHOUT sacrificing attack detection: FTP recall 1.000, benign recall 0.934, FPR 0.066 (CI lo FTP 1.000/benign 0.761); gave_up 0.2 (C1 0.0); no CIC regression. Recommend review.",
+  "selected_test": {
+    "ftp_recall": 1.0,
+    "benign_recall": 0.9344262295081968,
+    "false_positive_rate": 0.06557377049180328,
+    "ftp_precision": 0.9459459459459459,
+    "macro_f1": 0.9691619585687382,
+    "accuracy": 0.9694656488549618
+  },
+  "current_c1_test": {
+    "ftp_recall": 1.0,
+    "benign_recall": 0.8524590163934426,
+    "false_positive_rate": 0.14754098360655737
+  },
+  "ci_lower_ftp_recall": 1.0,
+  "ci_lower_benign_recall": 0.7611940298507462,
+  "gave_up_recall": {
+    "cross": 0.2,
+    "c1": 0.0
+  },
+  "cross_session_shap_share": 0.07327096088104498,
+  "ablation_cross_block": {
+    "with_cross": {
+      "ftp_recall": 1.0,
+      "benign_recall": 0.9344262295081968,
+      "false_positive_rate": 0.06557377049180328
+    },
+    "without_cross_45_same_data": {
+      "ftp_recall": 0.6,
+      "benign_recall": 0.9180327868852459,
+      "false_positive_rate": 0.08196721311475409
+    }
+  },
+  "critical_test_answer": "Cross-session information DOES resolve the benign-give-up vs brute-force ambiguity on genuinely independent traffic.",
+  "caveats": [
+    "Loopback lab; the cross-session corpus's attackers use one credential per connection, so they have MORE sessions than the vsFTPD test's attackers (which pack attempts per connection) -- a session-count distribution shift between train and test.",
+    "Frozen vsFTPD corpus evaluated once, for reporting; never training/selection/tuning.",
+    "Small test corpus (wide CIs). No promotion, no threshold change, no merge."
+  ],
+  "selection_reason": "CIC-gate=True, LOCO macro-F1 0.9905",
+  "shap": {
+    "top14": [
+      {
+        "feature": "Fwd Seg Size Min",
+        "share": 0.17410921423249537
+      },
+      {
+        "feature": "Dst Port",
+        "share": 0.1736812307304651
+      },
+      {
+        "feature": "Init Fwd Win Byts",
+        "share": 0.09140781637134003
+      },
+      {
+        "feature": "ftpx_failure_rate_across_sessions",
+        "share": 0.05562130734383351
+      },
+      {
+        "feature": "Fwd Pkts/s",
+        "share": 0.038389167151391075
+      },
+      {
+        "feature": "Fwd IAT Min",
+        "share": 0.03759126624857651
+      },
+      {
+        "feature": "Fwd Header Len",
+        "share": 0.03321734658280311
+      },
+      {
+        "feature": "Flow Pkts/s",
+        "share": 0.03129030159356346
+      },
+      {
+        "feature": "Flow IAT Mean",
+        "share": 0.03057881972406495
+      },
+      {
+        "feature": "Flow IAT Max",
+        "share": 0.028459719047950756
+      },
+      {
+        "feature": "Flow IAT Min",
+        "share": 0.026869013855407783
+      },
+      {
+        "feature": "ftp_user_commands",
+        "share": 0.021706425521119968
+      },
+      {
+        "feature": "Pkt Len Std",
+        "share": 0.020272078268568597
+      },
+      {
+        "feature": "Flow Duration",
+        "share": 0.020151845443515167
+      }
+    ],
+    "max_feature": "Fwd Seg Size Min",
+    "max_share": 0.17410921423249537,
+    "cross_session_share": 0.07327096088104498,
+    "behavioural_share": 0.04062314445091502,
+    "cic_artifact_share": 0.4391982613343005,
+    "top_cross_feature": "ftpx_failure_rate_across_sessions"
+  },
+  "ftps": [
+    {
+      "model": "production",
+      "n": 31,
+      "ftp_recall": 0.0,
+      "benign_recall": 1.0
+    },
+    {
+      "model": "C1_current_45",
+      "n": 31,
+      "ftp_recall": 0.0,
+      "benign_recall": 1.0
+    },
+    {
+      "model": "C3_controlled_43",
+      "n": 31,
+      "ftp_recall": 0.0,
+      "benign_recall": 1.0
+    },
+    {
+      "model": "candidate_cross_unweighted",
+      "n": 31,
+      "ftp_recall": 0.0,
+      "benign_recall": 1.0
+    }
+  ]
+}

@@ -1,0 +1,2 @@
+server,n_flows,ftp_recall,benign_recall,benign_fp
+vsftpd(plaintext),131,1.0,0.9344,4

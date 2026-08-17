@@ -1,0 +1,26 @@
+{
+  "capture_id": "ftpbf_07",
+  "scenario": "slow_brute_8",
+  "label": "FTP-BruteForce",
+  "client": "raw-socket",
+  "server": "permissive(pyftpdlib)",
+  "environment": "cs30 (127.0.0.30)",
+  "interface": "lo",
+  "mode": "passive",
+  "scenario_family": "slow_brute",
+  "attempts": 8,
+  "duration_s": 2.8107,
+  "packet_count": 120,
+  "capture_timestamp": "2026-08-17T02:14:47.957071+00:00",
+  "source": "127.0.0.30",
+  "destination": "127.0.0.30:2640",
+  "capture_command": "tcpdump -i lo -w <pcap> -U -n 'host 127.0.0.30 and (tcp port 2640 or tcp port 20 or tcp portrange 60040-60079)'",
+  "verification_status": "valid",
+  "detail": {
+    "sessions": 8,
+    "successes": 0,
+    "failures": 8,
+    "label_reason": "attack_slow_brute",
+    "check_errors": []
+  }
+}

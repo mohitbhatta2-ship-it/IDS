@@ -25,3 +25,6 @@ validation/models/ftp-behavioral-ext/*.pkl !filter !diff !merge
 
 # ftp_failed_logins ablation candidate models: store as normal blobs (LFS push unavailable here)
 validation/models/ftp-failed-login-ablation/*.pkl !filter !diff !merge
+
+# Cross-session candidate models: store as normal blobs (LFS push unavailable here)
+validation/models/ftp-cross-session/*.pkl !filter !diff !merge

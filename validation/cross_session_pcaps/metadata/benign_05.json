@@ -1,0 +1,26 @@
+{
+  "capture_id": "benign_05",
+  "scenario": "giveup_single_3",
+  "label": "Benign",
+  "client": "raw-socket",
+  "server": "permissive(pyftpdlib)",
+  "environment": "cs30 (127.0.0.30)",
+  "interface": "lo",
+  "mode": "passive",
+  "scenario_family": "gave_up",
+  "attempts": 1,
+  "duration_s": 0.0013,
+  "packet_count": 23,
+  "capture_timestamp": "2026-08-17T02:13:55.184245+00:00",
+  "source": "127.0.0.30",
+  "destination": "127.0.0.30:2640",
+  "capture_command": "tcpdump -i lo -w <pcap> -U -n 'host 127.0.0.30 and (tcp port 2640 or tcp port 20 or tcp portrange 60040-60079)'",
+  "verification_status": "valid",
+  "detail": {
+    "sessions": 1,
+    "successes": 0,
+    "failures": 3,
+    "label_reason": "benign_giveup_single",
+    "check_errors": []
+  }
+}

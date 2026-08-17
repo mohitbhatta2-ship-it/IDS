@@ -1,0 +1,26 @@
+{
+  "capture_id": "benign_13",
+  "scenario": "mixed_success_mistype",
+  "label": "Benign",
+  "client": "python-ftplib",
+  "server": "custom(custom-raw-socket)",
+  "environment": "cs30 (127.0.0.30)",
+  "interface": "lo",
+  "mode": "passive",
+  "scenario_family": "mistype",
+  "attempts": 2,
+  "duration_s": 0.9272,
+  "packet_count": 72,
+  "capture_timestamp": "2026-08-17T02:14:26.620655+00:00",
+  "source": "127.0.0.30",
+  "destination": "127.0.0.30:2630",
+  "capture_command": "tcpdump -i lo -w <pcap> -U -n 'host 127.0.0.30 and (tcp port 2630 or tcp port 20 or tcp portrange 60000-60039)'",
+  "verification_status": "valid",
+  "detail": {
+    "sessions": 2,
+    "successes": 2,
+    "failures": 1,
+    "label_reason": "benign_mixed",
+    "check_errors": []
+  }
+}

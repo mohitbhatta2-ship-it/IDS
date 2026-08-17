@@ -3566,3 +3566,140 @@ class FtpFailedLoginAblationResultsTests(TestCase):
         model, _ = ml._load("histgradientboosting")
         acc = float((model.predict(test[ml.FEATURES]) == test["Label"]).mean())
         self.assertAlmostEqual(acc, 0.9803, places=4)
+
+
+# ---------------------------------------------------------------------------
+# Cross-session / source-level behaviour experiment
+# ---------------------------------------------------------------------------
+
+from predictor import ftp_cross_session as _fcs, retraining_cross_session as _rce
+
+_CS_DIR = _P2(__file__).resolve().parents[2] / "validation" / "cross_session_pcaps"
+_HAS_CS = (_CS_DIR / "MANIFEST.csv").is_file()
+_CS_RESULTS = _P2(__file__).resolve().parents[2] / "validation" / "results" / "ftp_cross_session"
+_HAS_CS_RESULTS = (_CS_RESULTS / "final_verdict.json").is_file()
+
+
+class FtpCrossSessionFeatureTests(TestCase):
+    def test_schema_size_and_disjoint_from_existing(self):
+        self.assertEqual(len(_fcs.CROSS_FEATURES), 13)
+        self.assertTrue(set(_fcs.CROSS_FEATURES).isdisjoint(set(_fb.BEHAV_FEATURES)))
+
+    def test_augmented_preserves_30_and_15_then_appends_cross(self):
+        self.assertEqual(len(_rce.FEATURES_AUG_CROSS), 58)
+        self.assertEqual(_rce.FEATURES_AUG_CROSS[:30], list(ml.FEATURES))
+        self.assertEqual(_rce.FEATURES_AUG_CROSS[30:45], list(_fb.BEHAV_FEATURES))
+        self.assertEqual(_rce.FEATURES_AUG_CROSS[45:], list(_fcs.CROSS_FEATURES))
+
+    def test_cic_cross_app_features_nan_not_zero(self):
+        cicX, _ = _rce.load_cic_cross()
+        for f in _rce.APP_FEATURES:
+            self.assertTrue(cicX[f].isna().all(), f)
+
+    @skipUnless(_SCAPY and _HAS_CS, "scapy + cross-session corpus")
+    def test_undefined_cross_features_are_nan(self):
+        import glob
+        import math
+        # a single-session benign capture cannot define time-between-sessions -> NaN
+        for pcap in glob.glob(str(_CS_DIR / "benign" / "*giveup_single*.pcap")):
+            c = _fcs.cross_session_features_for_pcap(pcap)
+            if c["ftpx_sessions_per_source"] < 2:
+                self.assertTrue(math.isnan(c["ftpx_mean_time_between_sessions_s"]))
+
+
+@skipUnless(_HAS_CS, "cross-session corpus not present")
+class CrossSessionCorpusTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        with (_CS_DIR / "MANIFEST.csv").open() as f:
+            cls.rows = list(csv.DictReader(f))
+        cls.base = _P2(__file__).resolve().parents[2] / "validation"
+
+    def test_disjoint_from_all_prior_and_the_frozen_test(self):
+        new = _pcap_sha_set(_CS_DIR)
+        for other in ("realistic_pcaps", "realistic_pcaps_v2", "independent_real_pcaps",
+                      "targeted_benign_pcaps", "robustness_pcaps", "robust_train_pcaps",
+                      "benign_failed_login_pcaps", "independent_ftp_validation_pcaps"):
+            self.assertTrue(new.isdisjoint(_pcap_sha_set(self.base / other)), other)
+
+    def test_labels_from_folders(self):
+        for r in self.rows:
+            folder = "benign" if r["label"] == "Benign" else "ftp_bruteforce"
+            self.assertTrue(list((_CS_DIR / folder).glob(f"{r['capture_id']}_*.pcap")))
+            self.assertIn(r["label"], ("Benign", "FTP-BruteForce"))
+
+    def test_all_verified_valid(self):
+        for r in self.rows:
+            self.assertEqual(r["verification_status"], "valid", r["capture_id"])
+
+    def test_new_addresses_and_ports(self):
+        from predictor import cross_session_capture as csc
+        self.assertEqual(set(csc.TRAIN_PORT.values()), {2630, 2640})
+        for addr, _ in csc.train_environments().values():
+            self.assertTrue(csc.is_controlled_local(addr))
+
+    @skipUnless(_SCAPY, "scapy")
+    def test_attackers_have_more_sessions_than_benign(self):
+        import glob
+        import numpy as _np3
+        def sess(folder):
+            return [_fcs.cross_session_features_for_pcap(p)["ftpx_sessions_per_source"]
+                    for p in glob.glob(str(_CS_DIR / folder / "*.pcap"))]
+        ben, atk = sess("benign"), sess("ftp_bruteforce")
+        # the corpus is built so attacker source-windows persist across more sessions
+        self.assertGreater(_np3.median(atk), _np3.median(ben))
+
+
+@skipUnless(_HAS_CS_RESULTS, "committed cross-session results not present")
+class FtpCrossSessionResultsTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.verdict = json.loads((_CS_RESULTS / "final_verdict.json").read_text())
+        cls.hashes = json.loads((_CS_RESULTS / "model_hashes_before_after.json").read_text())
+        cls.leak = json.loads((_CS_RESULTS / "leakage_validation.json").read_text())
+
+    def test_verdict_is_one_of_the_four_and_not_promoted(self):
+        self.assertIn(self.verdict["verdict"], (
+            "PROMISING -- TARGET MET", "PROMISING -- NEEDS MORE DATA", "NOT EFFECTIVE",
+            "INVALID -- LEAKAGE/INTEGRITY FAILURE"))
+        self.assertFalse(self.verdict["promote"])
+
+    def test_frozen_unchanged(self):
+        self.assertTrue(self.hashes["unchanged"])
+        self.assertEqual(self.hashes["before"], self.hashes["after"])
+
+    def test_ftp_recall_not_sacrificed(self):
+        # the core constraint: do not sacrifice attack detection
+        self.assertTrue(self.verdict["ftp_recall_preserved"])
+        self.assertGreaterEqual(self.verdict["selected_test"]["ftp_recall"], 0.90)
+
+    def test_leakage_and_feature_integrity(self):
+        self.assertEqual(self.leak["n_features"], 58)
+        self.assertTrue(self.leak["packet_features_preserved"])
+        self.assertTrue(self.leak["behavioural_15_preserved"])
+        self.assertTrue(self.leak["cross_features_appended"])
+        self.assertTrue(self.leak["train_disjoint_from_test"])
+        self.assertTrue(self.leak["no_zero_fill_train"])
+        self.assertTrue(self.leak["no_zero_fill_test"])
+        self.assertTrue(self.leak["every_flow_traceable"])
+        self.assertIn("NOT the vsFTPD", self.leak["selection_used"])
+
+    def test_critical_test_and_ablation_recorded(self):
+        self.assertIn("critical_test_answer", self.verdict)
+        self.assertIn("ablation_cross_block", self.verdict)
+        self.assertIn("gave_up_recall", self.verdict)
+
+    def test_required_files_exist(self):
+        for name in ("final_test_metrics.csv", "cic_heldout_metrics.csv", "loco_pooled_metrics.json",
+                     "per_scenario_family_metrics.csv", "per_source_session_metrics.csv", "bootstrap_cis.json",
+                     "ftps_encrypted_metrics.csv", "leakage_validation.json", "model_hashes_before_after.json",
+                     "final_verdict.json", "report.md"):
+            self.assertTrue((_CS_RESULTS / name).is_file(), name)
+
+    def test_production_unchanged(self):
+        test = pd.read_parquet(ml.DATA_ROOT / "Processed_Data" / "test_selected.parquet")
+        model, _ = ml._load("histgradientboosting")
+        acc = float((model.predict(test[ml.FEATURES]) == test["Label"]).mean())
+        self.assertAlmostEqual(acc, 0.9803, places=4)

@@ -1,0 +1,63 @@
+{
+  "experiment": "cross_session_corpus",
+  "created_utc": "2026-08-17T02:15:11.923146+00:00",
+  "purpose": "Multiple sessions per source for cross-session/source-level feature learning.",
+  "for_training": true,
+  "labels_from": "scenario folder",
+  "pcap_count": 28,
+  "benign_count": 14,
+  "ftp_bruteforce_count": 14,
+  "captures_passing_verification": 28,
+  "total_flows": 328,
+  "total_incomplete_flows": 0,
+  "diversity": {
+    "by_scenario_family": {
+      "mistype": 4,
+      "gave_up": 3,
+      "reconnect": 2,
+      "repeated": 4,
+      "multi_user": 1,
+      "repeated_fails": 4,
+      "cred_sweep": 4,
+      "slow_brute": 2,
+      "eventual_success": 2,
+      "bursts": 2
+    },
+    "by_server": {
+      "custom(custom-raw-socket)": 16,
+      "permissive(pyftpdlib)": 12
+    },
+    "by_client": {
+      "python-ftplib": 11,
+      "raw-socket": 17
+    },
+    "by_mode": {
+      "passive": 28
+    }
+  },
+  "leakage": {
+    "all_pass": true,
+    "checks": {
+      "disjoint_from_v1": true,
+      "disjoint_from_v2": true,
+      "disjoint_from_independent": true,
+      "disjoint_from_targeted": true,
+      "disjoint_from_robustness": true,
+      "disjoint_from_robust_train": true,
+      "disjoint_from_benign_failed_login": true,
+      "disjoint_from_independent_ftp_val": true,
+      "no_duplicate_within_corpus": true,
+      "labels_only_from_folders": true,
+      "all_verified_valid": true,
+      "disjoint_from_frozen_vsftpd_TEST": true
+    },
+    "n_new": 28
+  },
+  "limitations": [
+    "Loopback lab; pyftpdlib + custom raw-socket (vsftpd held out); one source per capture.",
+    "TRAIN-only; disjoint from the frozen vsFTPD test."
+  ],
+  "versions": {
+    "python": "3.11.15"
+  }
+}
