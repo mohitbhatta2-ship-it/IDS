@@ -19,3 +19,6 @@ shap
 
 # Tests
 pytest
+
+#ftpserver
+pyftpdlib
