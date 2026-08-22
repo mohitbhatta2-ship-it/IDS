@@ -62,13 +62,13 @@ def main() -> int:
         args.rows = total
 
     # Stratified sample: each class contributes proportionally to its share in the test set.
-    sample = (
-        test.groupby("Label", group_keys=False)
-        .apply(lambda g: g.sample(
-            n=max(1, round(len(g) / total * args.rows)),
-            random_state=SEED,
-        ))
-    )
+    # Uses a plain loop rather than groupby().apply() to avoid pandas 2.2+ behaviour where
+    # the grouping column is excluded from the group passed to the lambda.
+    parts = []
+    for label_code, group in test.groupby("Label"):
+        n_take = max(1, round(len(group) / total * args.rows))
+        parts.append(group.sample(n=n_take, random_state=SEED))
+    sample = pd.concat(parts, ignore_index=True)
 
     # Shuffle so classes aren't grouped together.
     sample = sample.sample(frac=1.0, random_state=SEED).reset_index(drop=True)
