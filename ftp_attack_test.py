@@ -14,7 +14,9 @@ passwords = [
     "qwerty",
     "dragon",
     "monkey",
-    "monkeydluffy"
+    "monkeydluffy",
+    "ansiasbdi",
+
 ]
 
 print(f"Starting FTP brute-force test against {HOST}:{PORT}")
