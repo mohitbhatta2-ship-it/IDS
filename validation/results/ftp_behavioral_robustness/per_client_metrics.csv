@@ -1,5 +1,0 @@
-client,n_flows,accuracy,ftp_recall,benign_recall,benign_fp
-curl,16,1.0,1.0,1.0,0
-python-ftplib,146,0.9589,1.0,0.9286,6
-raw-socket,4,1.0,1.0,,0
-wget,4,1.0,,1.0,0

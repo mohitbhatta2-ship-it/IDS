@@ -1,3 +1,0 @@
-class,ground_truth,correct,incorrect,precision,recall,f1
-High,34,0,34,0.0,0.0,0.0
-None,8,8,0,0.0,0.0,0.0

@@ -1,8 +1,0 @@
-feature,cic_ftp_median,real_ftp_median
-Fwd Seg Size Min,40.0,20.0
-Init Fwd Win Byts,26883.0,8134.0
-Dst Port,21.0,21.0
-Flow Duration,4.0,1.0
-Flow Pkts/s,476883.4777350773,1000000.0
-TotLen Fwd Pkts,0.0,3.0
-TotLen Bwd Pkts,0.0,10.0

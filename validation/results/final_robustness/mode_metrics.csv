@@ -1,3 +1,0 @@
-group_type,group,flows,benign_support,ftp_support,ftp_recall,benign_recall,benign_fp_rate,macro_f1
-mode,active,20,4,16,0.5,0.5,0.5,0.45054945054945056
-mode,passive,400,74,326,0.7668711656441718,0.7297297297297297,0.2702702702702703,0.6841689696012634

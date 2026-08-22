@@ -1,3 +1,0 @@
-server,n_flows,accuracy,ftp_recall,benign_recall,benign_fp
-custom(custom-raw-socket),100,0.94,1.0,0.8846,6
-permissive(pyftpdlib),70,1.0,1.0,1.0,0

@@ -1,7 +1,0 @@
-model,mean_conf,mean_conf_correct,mean_conf_wrong,confidently_wrong_ge_0.9
-production,0.8721,0.891,0.851,52
-candidate2,0.8343,0.8355,0.8283,7
-behav_full_30+15,0.9929,0.9956,0.9202,4
-ablation_30only,0.7995,0.8428,0.7159,15
-ablation_behavioural_only,1.0,1.0,1.0,8
-ablation_no_failed_logins,0.9989,0.9995,0.9974,44

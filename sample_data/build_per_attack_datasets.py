@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Build one ready-to-upload CSV per traffic class.
 
@@ -56,7 +55,7 @@ def slug(name: str) -> str:
 
 def main() -> int:
     if not (DATA / "test_selected.parquet").is_file():
-        print(f"Missing {DATA/'test_selected.parquet'} -- run `git lfs pull`.")
+        print(f"Missing {DATA/'test_selected.parquet'} ")
         return 1
 
     test = pd.read_parquet(DATA / "test_selected.parquet")

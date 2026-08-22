@@ -1,9 +1,0 @@
-{
-  "candidate": "cic_only_reproduction",
-  "seed": 42,
-  "train": "full CIC only",
-  "cic_accuracy": 0.9804137697134137,
-  "cic_macro_f1": 0.8598570433880585,
-  "reproduces_baseline": true,
-  "scaler": null
-}

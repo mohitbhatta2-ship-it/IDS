@@ -1,7 +1,0 @@
-model,n,ftp_recall,benign_recall,predicted_ftp,predicted_benign
-production,31,0.0,1.0,0,31
-candidate2,31,0.375,1.0,9,22
-robust_behavioural,31,0.0,1.0,0,31
-ablation_30only,31,0.041666666666666664,1.0,1,30
-ablation_behavioural_only,31,0.0,1.0,0,31
-ablation_no_failed_logins,31,0.0,1.0,0,31

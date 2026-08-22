@@ -1,6 +1,0 @@
-sessions_per_source_bucket,label,n_flows,recall,median_sessions
-1,Benign,30,1.0,1.0
-2-3,Benign,31,0.871,2.0
-2-3,FTP-BruteForce,16,1.0,3.0
-4-6,FTP-BruteForce,38,1.0,6.0
-7+,FTP-BruteForce,16,1.0,8.0

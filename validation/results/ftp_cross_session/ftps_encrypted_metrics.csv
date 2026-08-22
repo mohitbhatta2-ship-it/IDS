@@ -1,5 +1,0 @@
-model,n,ftp_recall,benign_recall
-production,31,0.0,1.0
-C1_current_45,31,0.0,1.0
-C3_controlled_43,31,0.0,1.0
-candidate_cross_unweighted,31,0.0,1.0

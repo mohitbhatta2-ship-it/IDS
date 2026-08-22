@@ -1,6 +1,0 @@
-pcap,label,cfm_flows,valid_flows,invalid_flows,invalid_detail
-benign_01.pcap,Benign,1,1,0,[]
-benign_03.pcap,Benign,3,3,0,[]
-ftp_01.pcap,FTP-BruteForce,2,2,0,[]
-ftp_02.pcap,FTP-BruteForce,8,8,0,[]
-ftp_03.pcap,FTP-BruteForce,8,8,0,[]

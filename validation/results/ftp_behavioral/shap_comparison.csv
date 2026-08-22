@@ -1,5 +1,0 @@
-group,features
-global_top8,Dst Port;Fwd Seg Size Min;ftp_failed_logins;Init Fwd Win Byts;Fwd Pkts/s;Fwd Header Len;Fwd IAT Min;Flow Pkts/s
-test_ftp_top8,Dst Port;Fwd Seg Size Min;ftp_failed_logins;Init Fwd Win Byts;Fwd Pkts/s;Fwd Header Len;Fwd IAT Min;Flow Pkts/s
-test_benign_top8,Dst Port;Fwd Seg Size Min;Init Fwd Win Byts;Fwd Header Len;Fwd Pkts/s;Fwd IAT Min;Flow Pkts/s;Flow IAT Min
-behavioural_importance_share,0.14121170595271307

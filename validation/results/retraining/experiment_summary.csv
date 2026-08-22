@@ -1,2 +1,0 @@
-experiment,flows,captures,invalid_flows,baseline_real_ftp_recall,candidate_real_ftp_recall,baseline_cic_acc,candidate_cic_acc
-realistic_pcap_retraining,42,5,0,0.0,0.9117647058823529,0.9802990553521731,0.9810970682999332

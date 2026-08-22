@@ -1,6 +1,0 @@
-model,n,confidently_wrong,confidently_wrong_ftp_as_benign,confidently_wrong_benign_as_ftp,low_confidence_lt_0.60,mean_conf_correct,mean_conf_wrong,hi_threshold,low_threshold
-production,420,191,191,0,22,0.9241717559030678,0.8520487534825871,0.9,0.6
-candidate2,420,6,0,6,90,0.8833340579446555,0.6937017853621733,0.9,0.6
-targeted_none,420,45,37,8,17,0.9289240350891078,0.7886455177273929,0.9,0.6
-targeted_moderate,420,115,115,0,14,0.9494244912876771,0.8748252473373336,0.9,0.6
-targeted_strong,420,197,196,1,2,0.9382935902231241,0.9460438183679915,0.9,0.6

@@ -1,4 +1,0 @@
-source,data_role,production_accuracy,production_macro_f1,candidate_accuracy,candidate_macro_f1,production_ftp_recall,candidate_ftp_recall,production_benign_recall,candidate_benign_recall
-A_CIC_heldout,training/validation distribution,0.9802990553521732,0.862697325722646,0.980887589901146,0.8649513122069374,,,,
-B_v2_realistic_LOCO,prior leave-one-capture-out eval,0.1885245901639344,0.0904494382022471,0.8992974238875878,0.8533560155900581,0.0,0.9284649776453056,0.8797814207650273,0.7923497267759563
-C_independent_test,COMPLETELY INDEPENDENT final test,0.18095238095238095,0.12297734627831715,0.7476190476190476,0.6716717307295201,0.0,0.7543859649122807,0.9743589743589743,0.717948717948718

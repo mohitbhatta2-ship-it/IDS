@@ -1,6 +1,0 @@
-fold_held_out,test_label,test_flows,train_captures,train_cic_rows,train_real_rows
-benign_01.pcap,Benign,2,benign_03.pcap;ftp_01.pcap;ftp_02.pcap;ftp_03.pcap,281295,40
-benign_03.pcap,Benign,6,benign_01.pcap;ftp_01.pcap;ftp_02.pcap;ftp_03.pcap,281295,36
-ftp_01.pcap,FTP-BruteForce,3,benign_01.pcap;benign_03.pcap;ftp_02.pcap;ftp_03.pcap,281295,39
-ftp_02.pcap,FTP-BruteForce,15,benign_01.pcap;benign_03.pcap;ftp_01.pcap;ftp_03.pcap,281295,27
-ftp_03.pcap,FTP-BruteForce,16,benign_01.pcap;benign_03.pcap;ftp_01.pcap;ftp_02.pcap,281295,26

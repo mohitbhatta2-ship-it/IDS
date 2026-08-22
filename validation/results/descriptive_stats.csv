@@ -1,3 +1,0 @@
-class,flows,median Flow Duration (us),median Total Fwd Packets,median Total Bwd Packets,median TotLen Fwd Pkts,median TotLen Bwd Pkts,median Flow Pkts/s,median Flow Bytes/s (derived)
-Benign,8,29265.522956848145,4.0,5.0,17.0,45.5,13799.078749193108,390.84960109019937
-FTP-BruteForce,34,1.0,2.0,2.0,3.0,10.0,1000000.0,2.043761668768119
