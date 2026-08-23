@@ -30,7 +30,7 @@ class ManualFlowForm(forms.Form):
                 widget=forms.NumberInput(
                     attrs={
                         "step": "1" if stats["integer"] else "any",
-                        "placeholder": _format_number(stats["median"]),
+                        "placeholder": _format_number(stats["mean"]),
                     }
                 ),
             )

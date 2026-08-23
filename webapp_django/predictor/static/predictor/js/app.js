@@ -155,9 +155,9 @@
     });
   }
 
-  var fillMedian = document.getElementById("fill-median");
-  if (fillMedian) {
-    fillMedian.addEventListener("click", function () {
+  var fillMean = document.getElementById("fill-mean");
+  if (fillMean) {
+    fillMean.addEventListener("click", function () {
       setValues(function (input) { return input.getAttribute("placeholder"); });
       if (presetSelect) presetSelect.value = "";
     });
@@ -333,7 +333,7 @@
       var fieldErrors = {};
       missing.forEach(function (i) { fieldErrors[i.name] = true; });
       renderError(
-        missing.length + " of 30 features are empty. Use “Fill with medians” or load an example flow.",
+        missing.length + " of 30 features are empty. Use “Fill with means” or load an example flow.",
         fieldErrors
       );
       return;

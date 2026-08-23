@@ -35,7 +35,7 @@
         </select>
       </div>
 
-      <button type="button" class="btn btn-ghost btn-sm" id="fill-median">Fill with medians</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="fill-mean">Fill with means</button>
       <button type="button" class="btn btn-ghost btn-sm" id="clear-all">Clear</button>
     </div>
 
@@ -51,8 +51,8 @@
               <div class="field" data-field="{{ f.name }}">
                 <label for="id_{{ f.name }}" title="{{ f.name }}">{{ f.name }}</label>
                 <input type="number" step="{{ f.step }}" id="id_{{ f.name }}" name="{{ f.name }}"
-                       placeholder="{{ f.median|floatformat:'-2' }}" autocomplete="off">
-                <span class="field-hint">median {{ f.median|floatformat:'-2' }}</span>
+                       placeholder="{{ f.mean|floatformat:'-2' }}" autocomplete="off">
+                <span class="field-hint">mean {{ f.mean|floatformat:'-2' }}</span>
               </div>
             {% endfor %}
           </div>
